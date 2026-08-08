@@ -1,0 +1,13 @@
+# Foundry build artifacts
+out/
+cache/
+broadcast/
+
+# Secrets — the deployer key lives here and must never be committed
+.env
+
+# lib/ is deliberately NOT ignored: it is git submodules, not vendored code.
+
+# Editor / OS
+.DS_Store
+*.swp
