@@ -14,6 +14,7 @@ dist/
 build/
 .vite/
 coverage/
+*.tsbuildinfo
 
 # Solidity
 artifacts/

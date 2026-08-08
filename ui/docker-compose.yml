@@ -1,0 +1,18 @@
+# Frontend stack, independent of api/docker-compose.yml (project-structure §3.2).
+#
+# Only VITE_-prefixed variables reach the browser bundle. That is why pointing
+# env_file at the shared root .env is safe: OPERATOR_PRIVATE_KEY and friends
+# cannot leak into the shipped JavaScript even though they are in the file.
+
+services:
+  ui:
+    build: .
+    env_file: ../.env
+    environment:
+      # The API as seen from inside the container. If the API runs on the host
+      # rather than in a compose network, use http://host.docker.internal:3000.
+      VITE_API_URL: ${VITE_API_URL:-http://host.docker.internal:3000}
+    ports:
+      - '5173:5173'
+    volumes:
+      - ./src:/app/src

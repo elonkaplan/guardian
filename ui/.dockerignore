@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+.git/
+.gitignore
+Dockerfile
+.dockerignore
+docker-compose.yml
+*.log
+.env
+.env.local
+.env.*.local
+specs/
+docs/
+.specify/
+.claude/
+.DS_Store

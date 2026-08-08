@@ -1,0 +1,242 @@
+/*
+ * Foundation styling only: design tokens plus the app shell layout.
+ *
+ * No framework, no CSS-in-JS. The design budget belongs to Order Detail and the
+ * verdict card. Custom properties now mean whichever feature first needs real
+ * design can introduce a system without a find-and-replace across eight screens.
+ */
+
+:root {
+  --color-bg: #0f1115;
+  --color-surface: #171a21;
+  --color-border: #272b35;
+  --color-text: #e6e8ec;
+  --color-text-muted: #9aa1ad;
+  --color-accent: #6ea8fe;
+  --color-positive: #4ade80;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius: 8px;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* ---- App shell ---- */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.shell__brand {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+}
+
+.shell__nav {
+  display: flex;
+  gap: var(--space-4);
+  margin-left: var(--space-6);
+  flex: 1;
+}
+
+.shell__nav a {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.shell__nav a:hover {
+  color: var(--color-text);
+}
+
+.shell__main {
+  flex: 1;
+  padding: var(--space-8) var(--space-6);
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ---- Balance widget ---- */
+
+.balance {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: inherit;
+}
+
+.balance:hover {
+  border-color: var(--color-accent);
+  text-decoration: none;
+}
+
+.balance__figure {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.balance__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.balance__amount {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.balance__amount--muted {
+  color: var(--color-text-muted);
+}
+
+/* ---- Placeholder pages ---- */
+
+.placeholder__kicker {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+.placeholder__title {
+  margin: 0 0 var(--space-3);
+  font-size: 1.75rem;
+}
+
+.placeholder__note {
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-4);
+}
+
+.placeholder__param {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.placeholder__param-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.placeholder__param-value {
+  font-family: var(--font-mono);
+}
+
+/* ---- Status lines (health check, errors) ---- */
+
+.status {
+  display: inline-block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 0.9rem;
+}
+
+.status--ok {
+  border-color: var(--color-positive);
+  color: var(--color-positive);
+}
+
+.status--error {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.status--pending {
+  color: var(--color-text-muted);
+}
+
+/* ---- Fatal boot error (config failure) ---- */
+
+.fatal {
+  max-width: 40rem;
+  margin: 4rem auto;
+  padding: var(--space-6);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.fatal__title {
+  margin: 0 0 var(--space-3);
+  color: var(--color-danger);
+}
+
+.fatal__message {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  color: var(--color-text);
+}
