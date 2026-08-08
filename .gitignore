@@ -1,0 +1,25 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+keys.txt
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.vite/
+coverage/
+
+# Solidity
+artifacts/
+cache/
+typechain-types/
+
+# Editors / OS
+.DS_Store
+*.log
