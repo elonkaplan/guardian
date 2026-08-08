@@ -1,0 +1,39 @@
+# Dependencies and build output — installed/built inside the image
+node_modules/
+dist/
+build/
+coverage/
+
+# Incremental build state. Load-bearing: copying a host .tsbuildinfo into the
+# image makes tsc believe dist/ is already emitted, so after `deleteOutDir` wipes
+# dist it emits declarations only — and the container dies on "Cannot find
+# module /app/dist/main", which looks nothing like a caching problem.
+*.tsbuildinfo
+
+# Version control
+.git/
+.gitignore
+
+# Docker itself
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Spec Kit and documentation — not needed at runtime, and they invalidate
+# the build cache on every edit
+specs/
+docs/
+.specify/
+.claude/
+*.md
+
+# Secrets — supplied at runtime via env_file, never baked into an image
+.env
+.env.*
+
+# Editors / OS
+.DS_Store
+*.log
+*.swp
+.vscode/
+.idea/

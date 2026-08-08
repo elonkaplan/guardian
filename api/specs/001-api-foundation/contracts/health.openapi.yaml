@@ -1,0 +1,99 @@
+openapi: 3.1.0
+
+info:
+  title: Guardian API — Foundation
+  version: 0.1.0
+  description: >
+    The only endpoint delivered by API-01. Everything else in the Guardian API
+    arrives in later specs; this file grows with them.
+
+servers:
+  - url: http://localhost:3000
+    description: Local — identical whether the service runs in Compose or on the host
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness plus a confirmed database round-trip
+      description: >
+        Unauthenticated. Reports `ok` only when the service can reach PostgreSQL.
+        Touches no domain data and writes nothing. Deliberately shallow — the Monad
+        RPC endpoint and the Anthropic API are NOT probed, so a third-party outage
+        never renders this service unhealthy.
+      security: []          # no auth — must stay true once auth lands in API-03
+      responses:
+        '200':
+          description: All indicators up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReport'
+              examples:
+                healthy:
+                  value:
+                    status: ok
+                    info:
+                      database: { status: up }
+                    error: {}
+                    details:
+                      database: { status: up }
+        '503':
+          description: >
+            At least one indicator is down — in this feature, that means the database
+            is unreachable. The body carries the same envelope with `status: error`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReport'
+              examples:
+                databaseDown:
+                  value:
+                    status: error
+                    info: {}
+                    error:
+                      database:
+                        status: down
+                        message: timeout of 1500ms exceeded
+                    details:
+                      database:
+                        status: down
+                        message: timeout of 1500ms exceeded
+
+components:
+  schemas:
+    HealthReport:
+      type: object
+      required: [status, info, error, details]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+          description: '`ok` only if every indicator is up.'
+        info:
+          $ref: '#/components/schemas/IndicatorMap'
+          description: Indicators that passed.
+        error:
+          $ref: '#/components/schemas/IndicatorMap'
+          description: Indicators that failed.
+        details:
+          $ref: '#/components/schemas/IndicatorMap'
+          description: '`info` and `error` merged — every indicator, always present.'
+
+    IndicatorMap:
+      type: object
+      additionalProperties:
+        $ref: '#/components/schemas/IndicatorResult'
+
+    IndicatorResult:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [up, down]
+        message:
+          type: string
+          description: >
+            Present on failure only. MUST NOT contain any part of DATABASE_URL or any
+            other secret — report the failure class, never the credentials.

@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: guardian
+    # Published only so you can psql from the host. The API reaches Postgres over
+    # the Compose network and does not need this at all. Override when a native
+    # Postgres already holds 5432:  POSTGRES_HOST_PORT=5433 docker compose up
+    ports: ['${POSTGRES_HOST_PORT:-5432}:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    # This healthcheck matters more than it looks. Without it the API connects
+    # before Postgres accepts connections, the first query fails, the container
+    # exits — and the symptom reads as a code bug.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 3s
+      retries: 10
+
+  migrate:
+    build: .
+    env_file: ../.env
+    environment:
+      # Inside the Compose network the host is `postgres`, not `localhost`. The
+      # repository-root .env value targets localhost for running outside Docker.
+      # This override is the single difference between the two run modes, and
+      # forgetting it is the most common "works on my machine" trap here.
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/guardian
+    command: ['npm', 'run', 'migration:run']
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: .
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/guardian
+    ports: ['3000:3000']
+    depends_on:
+      postgres: { condition: service_healthy }
+      # The load-bearing clause: a failed migration stops the API from starting
+      # rather than letting it serve against a half-migrated schema.
+      migrate: { condition: service_completed_successfully }
+    volumes: ['./src:/app/src']
+
+volumes:
+  pgdata:
