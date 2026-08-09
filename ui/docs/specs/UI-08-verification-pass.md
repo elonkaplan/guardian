@@ -135,9 +135,25 @@ Specifically observed, not inferred:
 - The transaction hash links to MonadVision and **the page it lands on exists**
 - Balance figures move when an order settles
 
-### 4. UI-05's explicit carryovers
+### 4. Explicit carryovers from UI-05 and UI-07
 
-Named because they were deferred with a reason, not forgotten:
+Named because they were deferred with a reason, not forgotten.
+
+**From UI-07** (all three BLOCKED on a running API — no seller screen has ever
+rendered, since every route sits behind `RequireAuth`):
+
+- **T039 — greyscale on the seller screens**, same test as the verdict card below
+- **T040 — quickstart Part G**, the seller flow end to end: list an agent, see it in
+  the marketplace, toggle it inactive, see it leave — **and toggle it back**, which
+  is the check that catches an `?owner=me` filtered to active
+- **T029's live regression tier.** The static tier ran and found only copy strings
+  and signature lines. The live tier is the one that matters: **open a settled order
+  as the buyer** and confirm `perspective` changed nothing about the verdict card the
+  demo's closing beat depends on
+- Confirm the seller can open a disputed sale's **case file and verdict** — the
+  buyer-or-owner authorisation, exercised from the seller's side
+
+**From UI-05:**
 
 - **Quickstart Parts B–F** — the verdict card's own verification script
 - **Legibility at distance.** Read the verdict card from ~3m, the distance of a
