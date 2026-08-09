@@ -224,6 +224,13 @@ UNIQUE on `order_id` makes that structural.
 deserve different verdicts and only the trace can tell them apart — so capture
 reasoning turns, not just the final answer.
 
+**API-08 owns the demo *mechanism*, not its content.** It ships the
+`AgentRunner` port, `ScriptedAgentRunner`, and `DemoScriptRegistry` — empty.
+API-11 owns the three agent definitions, the three fixture inputs, and the
+three intended outcomes, and registers them into that registry. (Product-workflow
+§5.5 calls the fixtures "content rather than code, and no spec currently owns
+them" — API-11 does now.)
+
 **Done when** a purchase produces output and a delivered order, and a deliberately
 failing agent produces a `failed` order with a NULL-output run.
 

@@ -6,6 +6,7 @@ import { CatalogModule } from './catalog/catalog.module';
 import { ChainModule } from './chain/chain.module';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
+import { ExecutionModule } from './execution/execution.module';
 import { FundingModule } from './funding/funding.module';
 import { HealthModule } from './health/health.module';
 import { LedgerModule } from './ledger/ledger.module';
@@ -26,6 +27,12 @@ import { RainModule } from './rain/rain.module';
  * calls it. That is the point: the stub logs the exact payload Rain would have
  * received, which is the deliverable (`docs/rain-integration.md` §0.1). A module
  * left unregistered would be a stub of a stub.
+ *
+ * `ExecutionModule` registers no controller for the opposite reason: nothing
+ * calls it. Registering it is what starts its poller, and the poller is the only
+ * thing that turns a purchased order into a run — so an unregistered module here
+ * would leave every purchase parked in `purchased` with the money escrowed and
+ * no worker coming.
  */
 @Module({
   imports: [
@@ -36,6 +43,7 @@ import { RainModule } from './rain/rain.module';
     ChainModule,
     OrdersModule,
     CatalogModule,
+    ExecutionModule,
     AccountsModule,
     FundingModule,
     RainModule,

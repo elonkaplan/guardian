@@ -153,6 +153,22 @@ export const envSchema = z.object({
     .number('expected a positive integer')
     .int('expected a positive integer')
     .positive('expected a positive integer'),
+
+  // How often the execution poller looks for an order to run. `orders.state` is
+  // the queue (invariant #9), so this is the only thing that starts a run —
+  // there is no dispatcher and no broker (API-07 R13, API-08 research R1).
+  //
+  // Tunable rather than a constant for the same reason `SWEEPER_INTERVAL_MS` is:
+  // a rehearsal wants a second so a purchase visibly starts working, and a real
+  // deployment does not want a query per second forever. Defaulted, unlike its
+  // neighbour, because there is no value of this key that breaks a guarantee —
+  // a slow poller delays a run, where a zero review window silently destroys the
+  // buyer's right to complain.
+  EXECUTION_POLL_INTERVAL_MS: z.coerce
+    .number('expected a positive integer')
+    .int('expected a positive integer')
+    .positive('expected a positive integer')
+    .default(1000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

@@ -55,69 +55,19 @@
  */
 
 /**
- * One recorded action of a run, **as stored** — `runs.steps`, verbatim
- * (data-model §5).
+ * `ExecutionStep` — one recorded action of a run, as stored in `runs.steps`.
  *
- * ⚠️ **This is a contract for the execution feature (API-08), which is not
- * built yet. Nothing in this feature writes it.** It is declared here, ahead of
- * its producer, because the buyer's redaction is *structural* rather than
- * textual: the buyer's mapper is safe only because it never reads `reasoning`,
- * and that is a claim about a shape, so the shape has to be fixed before the
- * writer exists. Until API-08 lands there are no `runs` rows and every case
- * file returns `steps: []` and `rawSteps: []`.
- *
- * ⚠️ **`reasoning` is the field that carries model prose, and it is
- * seller-facing only.** Whoever builds API-08: model text goes in `reasoning`
- * and **nowhere else**. Putting a sentence of it into `label`, into `error`, or
- * into a fifth field added later defeats the redaction silently, because the
- * buyer's mapper copies those fields through verbatim and no test would fail.
- * The field-by-field contract:
- *
- * | Field        | Seller's copy | Buyer's copy |
- * | ------------ | ------------- | ------------ |
- * | `kind`       | verbatim | drives the platform-authored `summary` |
- * | `label`      | verbatim | verbatim — platform-authored, no model text in it |
- * | `reasoning`  | verbatim | **absent** — dropped, not truncated, not summarised |
- * | `durationMs` | verbatim | verbatim |
- * | `error`      | verbatim | verbatim |
- * | `startedAt`  | verbatim | absent — the UI's `CaseFileStep` does not declare it |
+ * **The declaration moved to `src/entities/execution-step.ts`** when API-08 —
+ * the feature that *writes* the column — was built. It was declared here first
+ * because the buyer's redaction is structural and the shape had to exist before
+ * its producer did; now that the producer exists, keeping the declaration in a
+ * consumer's DTO folder would mean the writer imports from a reader. The
+ * re-export keeps every existing import in this module resolving unchanged, and
+ * the field-by-field disclosure contract lives with the declaration.
  */
-export interface ExecutionStep {
-  /**
-   * What kind of action this was. A closed union rather than `string` so that
-   * the platform-authored `summary` can be composed by an exhaustive switch: a
-   * fifth kind added later becomes a compile error in the composer rather than
-   * a step that renders with no sentence under it.
-   */
-  kind: 'tool_call' | 'model_turn' | 'output' | 'error';
+import type { ExecutionStep } from '../../entities/execution-step';
 
-  /**
-   * Platform-authored — a tool name, a phase name. Safe for a buyer verbatim
-   * **because the platform wrote it**, not because it is short.
-   *
-   * ⚠️ Never put model output here to "give the buyer more detail". This is the
-   * one text field that crosses the boundary untouched.
-   */
-  label: string | null;
-
-  /**
-   * ⚠️ **MODEL PROSE. Seller-facing only, never mapped for a buyer.** A
-   * reasoning turn can paraphrase the system prompt it was given without ever
-   * touching the `system_prompt` column, which is why the disclosure boundary
-   * is wider than one field (`agent-serialiser.ts`). This is where that prose
-   * lives, and the buyer's mapper does not read it. That is the whole
-   * redaction.
-   */
-  reasoning: string | null;
-
-  durationMs: number | null;
-
-  /** The failure this step recorded, if it failed. Shown to both parties. */
-  error: string | null;
-
-  /** ISO-8601. Seller-facing only — not in the buyer's step shape. */
-  startedAt: string | null;
-}
+export type { ExecutionStep };
 
 /**
  * One step **as the buyer is allowed to see it** — `ui/src/api/types.ts`'s
