@@ -1,4 +1,5 @@
 import { config } from '../config';
+import { noteServerDate } from '../lib/serverClock';
 import { ApiError, LOCAL_ERROR_CODES } from './errors';
 import { UNAUTHENTICATED_EVENT, clearToken, readToken } from './session';
 
@@ -131,6 +132,13 @@ async function request<T>(
   } catch (cause) {
     throw toTransportError(cause, timeoutMs);
   }
+
+  // Every response carries a `Date`, so the countdown's clock offset stays fresh
+  // without a request of its own. Failures count: a 404's clock is as good as a
+  // 200's. A `null` here is expected cross-origin until the API sends
+  // `Access-Control-Expose-Headers: Date`, and until then the countdown simply
+  // runs on the device clock. See src/lib/serverClock.ts.
+  noteServerDate(response.headers.get('Date'));
 
   if (!response.ok) {
     // 401 means our credential is gone or stale. Clear it and let the shell

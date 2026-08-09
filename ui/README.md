@@ -52,8 +52,10 @@ src/
 ├── auth/        AuthContext (who is signed in) and useSignIn (the whole flow)
 ├── chain/       chain definition, wagmi config, wallet error classification
 ├── components/  app shell, balance widget, route guard, wallet menu, banner
-├── hooks/       usePolling — the shared refresh mechanism
-├── lib/         money formatting, query client
+├── hooks/       usePolling (shared refresh), useNow (the app's only timer),
+│               useCountdown, useOrder, useAccountSummary
+├── lib/         money and duration formatting, order state machine, server clock,
+│               input schema, query client
 ├── pages/       one file per screen
 ├── routes/      path builders and the route table
 └── config.ts    VITE_API_URL, validated at startup
@@ -92,4 +94,8 @@ There is no test suite, so acceptance is by hand: `specs/001-ui-foundation/quick
 - **Identity is the stored credential, never wagmi's connection state.** A locked or slow-to-reconnect wallet must not sign the user out — see the comment at the top of `src/auth/AuthContext.tsx`. Nothing after sign-in needs the wallet.
 - **Sign-in is one imperative async function**, not an effect watching the address. An effect fires a signature prompt when the user switches accounts, which is exactly what must not happen.
 - **The catalogue needs a backend that has it.** `/agents` and `/agents/:id` are served by API-06, and buying calls API-07's `POST /orders`; the demo agents come from `POST /demo/seed` (API-11). Until those land, the marketplace correctly shows an error state — an empty catalogue there is a backend gap, not a frontend bug. Field names for those three payloads are provisional and live in `src/api/types.ts`; see `specs/003-marketplace-buy/contracts/internal-api.md` §8 for the diff list.
+- **The order screen's countdown runs on a server-anchored clock.** `src/lib/serverClock.ts` keeps an offset taken from the `Date` header of every API response, because the countdown is computed entirely client-side and a laptop with a skewed clock would show a window that expired before delivery. **`Date` is not a CORS-safelisted response header**, so cross-origin the browser hides it unless the API sends `Access-Control-Expose-Headers: Date` — which it does not today (it sends no CORS headers at all). Until it does, the offset stays 0 and the countdown uses the device clock, which is exactly the behaviour that existed before the module. Verified working end to end against a fixture that does send the header.
+- **One timer in the whole app**, `src/hooks/useNow.ts`. Both the elapsed line and the countdown read it. It reports an *instant*, never a duration, so a suspended tab is late by at most a tick rather than resuming from where it stopped. Do not add a second `setInterval`.
+- **On the order screen the poll is the recovery mechanism.** Accept and complain get no retry button when a request gets no answer: the page re-reads the order every second, so a call that landed corrects the interface by itself, and a duplicate meets an order that has already moved and is refused. This is the *opposite* of the `POST /orders` rule below, and the two are easy to confuse — `src/api/orders.ts` carries a scope note saying which is which.
+- **Order payload shapes are provisional and the endpoints do not exist.** `GET /orders/:id`, `POST /orders/:id/accept`, and `POST /orders/:id/complain` are unbuilt; the assumptions (embedded `run`, embedded `agentName`, ISO-8601 timestamps, `reviewWindowSeconds` as a per-order snapshot) are listed as a diff list in `specs/004-order-detail/contracts/internal-api.md` §7.
 - **`POST /orders` is not idempotent.** The backend commits the order and the ledger debit in one transaction and only then answers, so a timeout tells us nothing about whether it committed. `BuyPanel` offers no retry on that branch and sends the buyer to `/orders` instead. Do not "improve" this into a retry button without an idempotency key on the API side.

@@ -1007,3 +1007,1264 @@ code {
   text-decoration: none;
   background: rgb(110 168 254 / 12%);
 }
+
+/* ---- Order detail ---- */
+
+/*
+  The screen the design budget was reserved for (`docs/ui-design.md` §1). Both
+  remaining acts of the demo happen here — delivery, review, complaint, verdict,
+  payout — on one page that changes while nobody is touching it, so this is the
+  one place where spending on layout pays for itself.
+
+  Two of the rules below are functional rather than decorative, and should not be
+  "tidied" away:
+
+  1. Live-updating numbers are mono with tabular figures. The elapsed clock ticks
+     once a second; in a proportional face the digits are different widths, so the
+     line reflows on every tick and the page reads as unstable at precisely the
+     moment the buyer is being asked to trust it.
+  2. Every pasted-text panel is height-bounded and scrolls inside itself. The
+     demo's own input is a pasted receipt, and an unbounded block would push the
+     state chip, the countdown, and the actions off screen — one large input must
+     not be able to hide the rest of the order.
+*/
+
+/*
+ * Wider than the reading measure the other screens use, deliberately. This page has
+ * to put a delivered output and the buyer's acceptance criteria beside each other and
+ * keep both readable at 1280×800 (SC-003), and a 52rem column leaves the criteria at
+ * roughly 335px — legible, but cramped enough that the side-by-side comparison stops
+ * feeling like a comparison. 68rem is the widest this can go before the prose faces
+ * (working, arbitration) start reading as a banner.
+ */
+.order {
+  display: grid;
+  gap: var(--space-6);
+  align-content: start;
+  max-width: 68rem;
+}
+
+.order__breadcrumb {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Dead ends: no order to show, so nothing needs the full width. */
+
+.order--missing {
+  max-width: 40rem;
+  gap: var(--space-3);
+}
+
+.order__missing-title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.order__missing-note {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/*
+  Provisional, and it has to look it. Dashed and italic so a face that has not
+  been built yet reads as an unfinished build rather than as the answer the order
+  screen had for you.
+*/
+
+.order__unbuilt {
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/*
+  An aside, not an alarm — and deliberately unlike `.load-state--error`, which
+  owns the danger colour and a retry button. Nothing on this page is wrong; the
+  poll simply missed a beat and the state below is the last good read. So: small,
+  muted body text, no box, no red, and only a thin warning-tinted rule to mark it
+  as a note about the page rather than part of it.
+*/
+
+.order__stale {
+  margin: 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  border-left: 2px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  max-width: 44rem;
+}
+
+/* ---- Order summary header ---- */
+
+/*
+  The band that does not move: identity left, money and state right, and the same
+  geometry on all five faces. It wraps rather than compresses, because a squeezed
+  agent name and a squeezed price are how the band starts looking like a
+  different band on a narrower screen.
+*/
+
+.order-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.order-summary__identity {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.order-summary__agent {
+  margin: 0;
+  font-size: 1.6rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.order-summary__id {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.order-summary__id-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.order-summary__id-value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.order-summary__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+}
+
+.order-summary__figure {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.order-summary__figure-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.order-summary__figure-value {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  color: var(--color-text);
+}
+
+/*
+  The chip is the one thing on the page that must be readable from across a room,
+  so it is a pill with a tint rather than a saturated fill — a solid block of
+  danger colour in the header would make a routine dispute look like a crash.
+
+  Colour follows meaning, not variety. In-flight states stay neutral; `delivered`
+  is the only one that asks for attention, because it is the only one with a clock
+  running against the buyer. Money-out-of-escrow states are positive, the two
+  states a buyer would call bad news are danger, and `adjudicated` is warm because
+  it is neither: a ruling exists, the split has not executed yet.
+*/
+
+.order-summary__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-text-muted) 35%, transparent);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.order-summary__chip--purchased,
+.order-summary__chip--running {
+  background: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-text-muted) 35%, transparent);
+  color: var(--color-text-muted);
+}
+
+.order-summary__chip--running {
+  color: var(--color-text);
+}
+
+.order-summary__chip--delivered {
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  color: var(--color-accent);
+}
+
+.order-summary__chip--failed,
+.order-summary__chip--disputed {
+  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
+  color: var(--color-danger);
+}
+
+.order-summary__chip--adjudicated {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+  color: var(--color-warning);
+}
+
+.order-summary__chip--released,
+.order-summary__chip--settled {
+  background: color-mix(in srgb, var(--color-positive) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-positive) 40%, transparent);
+  color: var(--color-positive);
+}
+
+/* ---- Order faces ---- */
+
+.order__face {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+.order__face-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.order__face--working .order__face-title {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.order__elapsed {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.order__elapsed-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+/*
+  Rule 1 from the header comment: this number changes once a second. Mono plus
+  tabular figures keeps every digit the same width, so the line holds still while
+  the clock runs.
+*/
+
+.order__elapsed-value {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+/* ---- Submitted input ---- */
+
+.submitted-input {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.submitted-input__heading {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.submitted-input__note {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.submitted-input__pending,
+.submitted-input__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.submitted-input__rows {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.submitted-input__row {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.submitted-input__label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.submitted-input__value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/*
+  Short values sit beside their label once there is room for two columns; long
+  ones never do, because a receipt squeezed into a value column is one unreadable
+  line and this is the text the buyer most needs to actually read.
+*/
+
+@media (min-width: 40rem) {
+  .submitted-input__row {
+    grid-template-columns: minmax(7rem, 12rem) 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
+  }
+
+  .submitted-input__row--block {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+}
+
+/*
+  Rule 2 from the header comment. Pasted input is unbounded in principle — the
+  demo's own is a receipt — so the panel is capped and scrolls inside itself
+  rather than growing the page. `pre-wrap` keeps the buyer's own line breaks,
+  which is the point of quoting it back at all.
+*/
+
+.submitted-input__block,
+.submitted-input__json {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.submitted-input__blank {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ---- Review countdown ---- */
+
+/*
+  The size of this number is a product decision, not a style preference.
+  `docs/ui-design.md` §6 names the countdown as one of exactly three things that
+  must be visible to the room during the demo — it is the only evidence anyone
+  watching can check that the escrow is genuinely time-locked. A clock sized like
+  body text is a clock nobody in the back row can read, and an unwatched clock
+  proves nothing when it reaches zero. So it is the largest single number on the
+  page, and anything that shrinks it to match its neighbours has traded away the
+  argument the screen exists to make.
+
+  Accent rather than warning or danger: a running review window is the normal,
+  expected shape of a healthy order (it is the same accent the `delivered` chip
+  carries), and a red hero panel would tell the room something has gone wrong at
+  the exact moment nothing has.
+
+  Rule 1 from the Order detail header comment applies here hardest — see the
+  min-width note on the value below.
+*/
+
+.review-countdown {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-6);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  text-align: center;
+}
+
+.review-countdown__title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-accent);
+}
+
+/*
+  Two defences against the hero number jostling the page as it ticks, because a
+  layout that twitches once a second reads as a page that is guessing:
+
+  1. Tabular figures, so `1` and `9` occupy the same advance and `19s` → `18s`
+     does not resize the string.
+  2. `min-width`, which tabular figures alone cannot supply — the *character
+     count* changes too, at `10s` → `9s` and again at `1m 0s` → `59s`. 7ch is the
+     longest string `formatRemaining` can produce in the demo's range (`59m 59s`),
+     so the box is sized once for the worst case and never resized. The digits
+     recentre inside it; nothing around them moves.
+*/
+
+.review-countdown__value {
+  margin: 0;
+  min-width: 7ch;
+  font-family: var(--font-mono);
+  font-size: 2.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.05;
+  color: var(--color-text);
+}
+
+.review-countdown__label {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/*
+  The window has closed, and that is an ordinary, successful ending — never the
+  danger colour. The urgency drains out deliberately: with the number frozen at
+  zero the interesting thing on this panel is the sentence, so the accent gives
+  way to neutral and the label is the only part still at full contrast.
+*/
+
+.review-countdown--expired {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.review-countdown--expired .review-countdown__title {
+  color: var(--color-text-muted);
+}
+
+.review-countdown--expired .review-countdown__value {
+  color: var(--color-text-muted);
+}
+
+.review-countdown--expired .review-countdown__label {
+  color: var(--color-text);
+}
+
+/* The hero panel needs air between itself and the output below it. */
+
+.order__face--review {
+  gap: var(--space-6);
+}
+
+/* A plain paragraph under a face title: read, not skimmed, so a real measure. */
+
+.order__face-note {
+  margin: 0;
+  max-width: 44rem;
+  color: var(--color-text-muted);
+}
+
+/* ---- Review columns: output beside criteria ---- */
+
+/*
+  This block is a measured requirement, not a look (FR-022, SC-003, research R8).
+
+  Act 2 of the demo (`docs/product-workflow.md` §5.3) is LedgerBot returning three
+  line items out of five, and the act only lands if the room reaches the 50%
+  verdict *before* Guardian announces it. Reaching it means holding two things in
+  one glance: the rows that came back, and the sentence the buyer wrote before any
+  work existed. Side by side, that is a comparison anybody can perform in a second.
+  Stacked, it becomes "read an output, scroll away, try to remember what you asked
+  for" — which is the ordinary experience of being *told* a decision instead of
+  reaching one, and it turns the verdict from confirmation into an oracle.
+
+  So the test is mechanical: at 1280×800 both panels must be readable at once, with
+  no scrolling from one to the other. Anything that lets one panel grow until it
+  pushes the other off the fold fails, however good it looks with short content —
+  hence the bounded heights and the internal scrolling below (FR-024).
+*/
+
+.order__review-columns {
+  display: grid;
+  /*
+    `minmax(0, …)` on both tracks, not a bare `1fr`. A grid track's default
+    minimum is `auto`, which means min-content: one wide output table, one long
+    unbroken JSON line, or one long word in a cell would push its column past its
+    share and squeeze the criteria to a sliver — the exact failure this layout
+    exists to prevent. The zero minimum lets the track hold its ratio and hands
+    the overflow to the panel's own scrollbar. Do not simplify these to `1.4fr 1fr`.
+  */
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+/*
+  Shared panel geometry. Column layout rather than block flow so the fixed heading
+  area stays pinned and exactly one child — the body — absorbs the overflow.
+
+  `max-height: min(26rem, 45vh)`: at the demo viewport (800px tall) `45vh` wins at
+  360px, which is what the budget allows. Above these panels sit the header band
+  (~50px), the page padding, the order summary (~100px), and the countdown hero
+  (~165px) — the countdown is one of the three things `docs/ui-design.md` §6 says
+  must stay visible to the room, so it is not negotiable space. 360px leaves both
+  panels whole and still clears the Accept/Complain row beneath them. The `26rem`
+  ceiling takes over on a tall window, where an 800px-high panel of line items
+  would be a scroll of its own rather than something you take in at a glance.
+*/
+
+.output-panel,
+.criteria-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: min(26rem, 45vh);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.output-panel__heading,
+.criteria-panel__heading {
+  flex: none;
+  margin: 0;
+  font-size: 1rem;
+}
+
+/*
+  Printed in the panel head, outside the scroll, because counting is literally the
+  task the audience is performing — the number must not be able to scroll away
+  from the rows it counts.
+*/
+
+.output-panel__count {
+  flex: none;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.criteria-panel__note {
+  flex: none;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+/*
+  The one scrolling element in each panel. `min-height: 0` is load-bearing: a flex
+  item's default minimum is its content, so without it the body refuses to shrink,
+  the panel outgrows its own max-height, and the criteria beside it get pushed off
+  the fold — the failure in a costume.
+*/
+
+.output-panel__body,
+.criteria-panel__text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin: var(--space-3) 0 0;
+}
+
+.criteria-panel__text:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* The buyer's own words, their own line breaks. Quoted, never reflowed. */
+
+.criteria-panel__text {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+}
+
+/*
+  A real data table, because the row boundaries have to be countable at a glance —
+  that is the entire argument for the table branch existing. Borders under every
+  row and a faint stripe give two independent ways to see where one line item ends
+  and the next begins, from the back of a room.
+*/
+
+.output-panel__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+/*
+  The header sticks to the top of the scrolling body: on a long delivery the column
+  names must not scroll away from the values under them, or the rows stop meaning
+  anything halfway down.
+*/
+
+.output-panel__table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.output-panel__table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.output-panel__table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
+}
+
+.output-panel__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Prose, not code: a summary read as a paragraph, at a normal reading measure. */
+
+.output-panel__prose {
+  margin: 0;
+  max-width: 62ch;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The honest fallback. Mono because it is a structure, wrapped because it must not
+   force the column wider than its share. */
+
+.output-panel__json {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+}
+
+.output-panel__cell-json {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* A sentence, not a blank box: these branches say what happened, so they read as
+   body text rather than as a rendering failure. */
+
+.output-panel__empty,
+.criteria-panel__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.criteria-panel__empty {
+  flex: none;
+  margin-top: var(--space-3);
+}
+
+/* A missing or empty field inside a row — marked, so it is visibly absent rather
+   than looking like a cell that failed to render. */
+
+.output-panel__blank {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/*
+  The only breakpoint here, and it is set at 900px on purpose: the demo viewport is
+  1280px wide, so this rule can never fire on stage. Below it, two columns would be
+  two unreadable columns and a stack is the better answer — but that is a
+  concession to a narrow window, not an alternative layout for the demo.
+*/
+
+@media (max-width: 900px) {
+  .order__review-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Order actions: accept and complain ---- */
+
+/*
+  The one rule here that is not obvious, and the one most likely to be "fixed" by
+  someone tidying up: Complain is NOT styled as a destructive action. No red fill,
+  no red border, no red text — it is a plain secondary control sitting beside
+  Accept.
+
+  That is a product decision, not a colour preference. Filing a complaint is a
+  legitimate, expected use of this product; it is the entire second act of the
+  demo and the only path to the arbitration Guardian exists to perform. A button
+  dressed in danger colours reads as "are you sure you want to break something",
+  and a buyer who is talked out of filing never reaches the verdict that makes the
+  case for the escrow. The dissuasion belongs in the dialog's copy, where it can be
+  honest about finality — not in a colour that discourages the click before anyone
+  has read a word.
+
+  Accept is the affirmative primary and looks it. Complain is available without
+  being invited: present, reachable, unshouted.
+*/
+
+.order-actions {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+/*
+  A row that wraps rather than shrinks. Both labels are full sentences — "Accept
+  and release payment" says what the money does — and truncating either one to
+  keep them on a line would strip the very words that make the choice informed.
+*/
+
+.order-actions__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Shared geometry: the two controls differ in weight, never in size or shape. */
+
+.order-actions__accept,
+.order-actions__complain {
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.order-actions__accept:focus-visible,
+.order-actions__complain:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/*
+  Both spend real seconds disabled while a request is in flight — and FR-030 means
+  either action disables both — so the disabled state is not a rare edge. It has to
+  say "wait", clearly, without looking like the button broke.
+*/
+
+.order-actions__accept:disabled,
+.order-actions__complain:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.order-actions__accept {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #0b1020;
+  font-weight: 600;
+}
+
+.order-actions__accept:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* Ghost, muted, and pointedly not red — see the block comment above. */
+
+.order-actions__complain {
+  border-color: var(--color-border);
+  background: none;
+  color: var(--color-text-muted);
+}
+
+.order-actions__complain:hover:not(:disabled) {
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
+}
+
+/*
+  Notices sit under the buttons and stay compact: they are the answer to a click,
+  not a banner about the page. A tinted left rule marks them as commentary on the
+  row above rather than a new panel — the same device `.order__stale` uses.
+*/
+
+.order-actions__notice {
+  margin: 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-3);
+  border-left: 2px solid transparent;
+  max-width: 44rem;
+  font-size: 0.9rem;
+}
+
+/* The backend understood us and said no. That is a genuine refusal: danger. */
+
+.order-actions__notice--refusal {
+  border-left-color: color-mix(in srgb, var(--color-danger) 50%, transparent);
+  color: var(--color-danger);
+}
+
+/*
+  Not an error — an unknown. We never heard back, so nothing has necessarily gone
+  wrong and the poll is already recovering it. Warning, the same warm register the
+  buy panel's ambiguous branch uses, because red here would assert a failure we
+  cannot actually claim.
+*/
+
+.order-actions__notice--silence {
+  border-left-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+  color: var(--color-warning);
+}
+
+/* ---- Complain dialog ---- */
+
+/*
+  The native `<dialog>` element itself. The UA gives it `margin: auto` only in the
+  top layer and a default `padding`/`border` that belong to no design system, so
+  both are reset here; `margin: auto` is restated explicitly so the box centres
+  whatever the surrounding layout is doing.
+*/
+
+.complain-dialog {
+  max-width: 34rem;
+  width: min(34rem, calc(100vw - 2rem));
+  margin: auto;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+/*
+  Dimmed and slightly blurred: the countdown behind this box is still running, and
+  it should stay visible as context while ceasing to compete for the eye.
+*/
+
+.complain-dialog::backdrop {
+  background: rgb(6 8 12 / 68%);
+  backdrop-filter: blur(2px);
+}
+
+.complain-dialog__title {
+  margin: 0 0 var(--space-4);
+  font-size: 1.25rem;
+}
+
+/*
+  The finality copy. It has to carry weight — filing cannot be undone and there is
+  no appeal — but a red box would do the discouraging the Complain button
+  deliberately refuses to do. So: a bordered inset panel in the warning tint, at
+  full text contrast, sized to be read rather than skimmed past. Serious, not
+  alarming.
+*/
+
+.complain-dialog__finality {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg));
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.complain-dialog__finality p {
+  margin: 0;
+}
+
+.complain-dialog__field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.complain-dialog__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/*
+  `font: inherit` first, because a bare `<textarea>` renders in the UA's monospace
+  at 13px — the buyer's grievance is prose and should look like the rest of the
+  page. Vertical resize only: horizontal dragging would break out of the dialog's
+  measured width.
+*/
+
+.complain-dialog__textarea {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.complain-dialog__textarea:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.complain-dialog__textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Tabular figures: this string changes on every keystroke, and a counter that
+   jitters as it counts pulls the eye off the box being typed into. */
+
+.complain-dialog__counter {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.complain-dialog__error {
+  margin: var(--space-3) 0 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+/* Confirm on the trailing edge, Cancel before it: the destructive-in-consequence
+   choice is the one that takes the deliberate reach. */
+
+.complain-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.complain-dialog__confirm,
+.complain-dialog__cancel {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.complain-dialog__confirm:focus-visible,
+.complain-dialog__cancel:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.complain-dialog__confirm:disabled,
+.complain-dialog__cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.complain-dialog__confirm {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #0b1020;
+  font-weight: 600;
+}
+
+.complain-dialog__confirm:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.complain-dialog__cancel {
+  border-color: var(--color-border);
+  background: none;
+  color: var(--color-text-muted);
+}
+
+.complain-dialog__cancel:hover:not(:disabled) {
+  border-color: var(--color-text-muted);
+  color: var(--color-text);
+}
+
+/* ---- Arbitration face ---- */
+
+/*
+  Guardian has the case and is reading it. The register is calm and clearly
+  in-progress: the buyer has just done the one irreversible thing on this page, and
+  the screen that greets them should look like a process running, not like an
+  incident. Warm rather than red — a dispute is a supported outcome, not a fault —
+  and quieter than the review face, because there is nothing to decide here and
+  nothing to hurry.
+*/
+
+.order__face--arbitration {
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--color-warning) 60%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-warning) 6%, var(--color-surface));
+}
+
+.order__face--arbitration .order__face-title {
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+.order__face--arbitration .order__face-note {
+  color: var(--color-text);
+}
+
+/*
+  The only motion on the page, and it is a slow breath rather than a spinner: it
+  says "still running" to anyone glancing back at the screen, without implying a
+  progress bar that could finish. Reduced-motion turns it off entirely — the
+  border and copy already carry the state, so nothing is lost.
+*/
+
+@keyframes order-arbitration-pulse {
+  from {
+    opacity: 0.55;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.order__face--arbitration .order__face-title::after {
+  content: '';
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: var(--space-2);
+  border-radius: 999px;
+  background: var(--color-warning);
+  vertical-align: middle;
+  animation: order-arbitration-pulse 1.8s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order__face--arbitration .order__face-title::after {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ---- Verdict slot, and the two concluded faces ---- */
+
+/*
+  The verdict region is where this feature stops, and the styling has to say that
+  it stopped on purpose.
+
+  The card that eventually fills it — tier, reasoning, clause checklist, split
+  figures, transaction hash — is UI-05. `VerdictSlot` reserves the space in the
+  meantime and renders only a heading and a sentence. That is a scope boundary,
+  not an unfinished edge, and until the card lands the region has to look
+  intentional: a section of a finished product whose contents are pending, never
+  a gap in the page (FR-007).
+
+  Which rules out the two obvious shorthands. A dashed outline is the universal
+  sign for "TODO, ignore this", and it would be the loudest thing on the most
+  conclusive screen in the demo. A thin muted line is worse in the other
+  direction — indistinguishable from a panel that failed to load, which invites
+  exactly the "is it broken?" reading the reservation exists to prevent. So it
+  gets the same treatment as every other surface on this page (`--color-surface`,
+  a real border, `--radius`, generous padding) and sits as an equal beside
+  them — a panel that is complete for what it currently claims.
+*/
+
+.verdict-slot {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.verdict-slot__heading {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+/* A sentence to be read, so the same measure the face notes get. */
+
+.verdict-slot__note {
+  margin: 0;
+  max-width: 44rem;
+  color: var(--color-text-muted);
+}
+
+/*
+  `adjudicated`: ruled, not yet paid out. In-progress, so the warm tint — the same
+  reading the arbitration face gets, for the same reason (a dispute is a supported
+  outcome, not a fault).
+
+  It is nested inside `.order__face--arbitration`, which is itself warning-tinted,
+  so the tint here is pitched above the face's 6% and the border carries more of
+  the separation. Otherwise the panel dissolves into its container and the region
+  reads as loose text rather than a reserved section.
+*/
+
+.verdict-slot--adjudicated {
+  border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--color-warning) 65%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+}
+
+.verdict-slot--adjudicated .verdict-slot__heading {
+  color: var(--color-warning);
+}
+
+.verdict-slot--adjudicated .verdict-slot__note {
+  color: var(--color-text);
+}
+
+/*
+  `settled`: the dispute is over and the money has moved. Positive tint, matching
+  the `settled`/`released` chips in the summary header so the page agrees with its
+  own status band. Nothing here is a warning any more.
+*/
+
+.verdict-slot--settled {
+  border-color: color-mix(in srgb, var(--color-positive) 35%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--color-positive) 55%, transparent);
+  background: color-mix(in srgb, var(--color-positive) 8%, var(--color-surface));
+}
+
+.verdict-slot--settled .verdict-slot__heading {
+  color: var(--color-positive);
+}
+
+.verdict-slot--settled .verdict-slot__note {
+  color: var(--color-text);
+}
+
+/*
+  The concluded face. `released` is the uncontested ending — the window ran out or
+  the buyer accepted, and the seller was paid in full. That is a good outcome and
+  it is styled as one: positive tint, calm, no danger colour anywhere near it. A
+  buyer landing on a finished order should feel the transaction closed cleanly,
+  not that something happened to it.
+
+  The heading and note rules below only ever hit the `released` branch — the
+  `settled` branch of this face renders `VerdictSlot` instead and is coloured by
+  the `--settled` rules above.
+*/
+
+.order__face--concluded {
+  gap: var(--space-6);
+}
+
+.order__face--concluded .order__face-title {
+  padding-left: var(--space-4);
+  border-left: 3px solid color-mix(in srgb, var(--color-positive) 60%, transparent);
+  color: var(--color-positive);
+}
+
+.order__face--concluded .order__face-note {
+  padding-left: var(--space-4);
+  border-left: 3px solid color-mix(in srgb, var(--color-positive) 25%, transparent);
+}
+
+/*
+  The failed face. Non-delivery IS a fault — the buyer paid and nothing arrived —
+  so unlike the dispute states this one earns the danger colour, and softening it
+  would be dishonest about what happened.
+
+  But it is a tint and a left rule, the same idiom as the arbitration face, and
+  deliberately not a filled red slab. Two reasons. The buyer is not at a dead end:
+  the Complain button sits directly beneath this block and non-delivery is
+  explicitly arbitrable, so the styling has to leave room for a next step rather
+  than close the page down. And an interface that shouts in red about its own
+  screen reads as the *product* having broken, when what broke is the agent's run
+  — the one misattribution this face exists to prevent.
+*/
+
+.order__face--failed {
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--color-danger) 60%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-danger) 6%, var(--color-surface));
+}
+
+.order__face--failed .order__face-title {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.order__face--failed .order__face-note {
+  color: var(--color-text);
+}
+
+/*
+  One child, one column. This face reuses `.order__review-columns` but has no
+  output to put beside the criteria — there was no delivery, which is the whole
+  point — so the two-track grid would render the criteria panel at 1.4fr-of-the-
+  width with a stranded empty column beside it, and empty space where the missing
+  output belongs is precisely the "something failed to load" reading this page
+  cannot afford. Collapsing to a single track and capping the measure keeps the
+  panel a deliberate width rather than a leftover one.
+*/
+
+.order__face--failed .order__review-columns {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 40rem;
+}

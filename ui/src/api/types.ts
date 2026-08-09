@@ -185,3 +185,119 @@ export interface CreateOrderRequest {
 export interface CreateOrderResponse {
   id: string;
 }
+
+/**
+ * The eight states an order can be in, listed in the declaration order of the
+ * backend's `order_state` enum (`api/specs/002-entities-migrations/data-model.md`
+ * §5.1). That order is fixed over there because Postgres sorts enum values by
+ * declaration, so it is not free to be rearranged for readability.
+ *
+ * The order carries no meaning in *this* file — nothing here compares two
+ * states, and the lifecycle ranking that decides whether a page may move
+ * backwards lives in `lib/orderState.ts`. Keeping the two lists character-for-
+ * character identical is the point: when the backend enum gains or reorders a
+ * value, a diff between the two files shows it, which is the only mechanism
+ * either side has for noticing.
+ *
+ * A union rather than `string` so that `faceFor` can be exhaustively checked. A
+ * ninth state added upstream then becomes a compile error in a switch that no
+ * longer covers its input, instead of an order page that quietly renders no
+ * face at all because nothing matched.
+ */
+export type OrderState =
+  | 'purchased'
+  | 'running'
+  | 'delivered'
+  | 'failed'
+  | 'released'
+  | 'disputed'
+  | 'adjudicated'
+  | 'settled';
+
+/**
+ * The execution attached to an order (`api/specs/002-entities-migrations/data-model.md`
+ * §6): what was sent to the agent, and what came back.
+ *
+ * `output` is `unknown` rather than a shape, because its shape *is* the seller's
+ * `outputSchema` and that is only known at runtime — the screen renders it by
+ * inspection, not by field access. Typing it as anything narrower would be a
+ * claim about a document this app has never seen.
+ *
+ * `null` is the failed case, and it is part of the type rather than an absence
+ * because "the agent returned nothing" is a thing the screen *says*, not a thing
+ * it omits. An optional property would let a non-delivery slip through as a
+ * section that simply fails to render, which is the exact silence the
+ * nothing-came-back face exists to break.
+ *
+ * There is no `steps`. Execution steps are a documented redaction hazard
+ * (api-design §1.3, ui-design §7.1 — a reasoning step can paraphrase the
+ * seller's system prompt), and as with `AgentListing` and `systemPrompt`, the
+ * absent property is the guarantee: no component can leak a step if the type
+ * gives it nowhere to put one, even if the serialiser upstream regresses and
+ * starts sending them.
+ */
+export interface OrderRun {
+  input: Record<string, unknown>;
+  output: unknown | null;
+}
+
+/**
+ * `GET /orders/:id` (api-design §3.4): everything the order screen follows.
+ *
+ * Every field but two maps to a column in
+ * `api/specs/002-entities-migrations/data-model.md` §5. The exceptions are
+ * `agentName`, which the backend resolves through `agent_version → agent`
+ * because the order points at an `agent_version_id` and the client has no way
+ * to turn that into a name the header can show; and `run` (§6), of which there
+ * is exactly one per order, embedded rather than fetched separately so that a
+ * one-second poll stays a single request.
+ *
+ * `reviewWindowSeconds` is a snapshot taken at purchase, not a configuration
+ * read. It is on the order so that an order shows the window it was actually
+ * sold under, even after the backend's default changes underneath it. The
+ * countdown must be computed from this field and nothing else — reading the
+ * live config instead would silently retime orders that were already sold.
+ *
+ * The two nullables are not the same kind of nothing. `run` is null because a
+ * `purchased` order has not started; `run.output` is null because a `failed`
+ * run produced nothing. They render differently, and collapsing them would tell
+ * a buyer their agent is still working when it has already given up.
+ *
+ * Timestamps are ISO-8601 strings, parsed at the point of use rather than
+ * converted to `Date` at the boundary. They arrive as JSON strings, and turning
+ * them into `Date` objects on the way in would mean a custom reviver for one
+ * field on one type — cost paid on every response to save a `Date.parse` in the
+ * one place that does arithmetic.
+ *
+ * There is no `systemPrompt` and no `model`, for the same reason `AgentListing`
+ * has neither: seller IP does not travel to the client, and the type is where
+ * that is enforced.
+ *
+ * NOTE: field names are provisional, for the same reason as `AccountSummary`
+ * above.
+ */
+export interface Order {
+  id: string;
+  state: OrderState;
+  agentName: string;
+  priceMinor: Cents;
+  acceptanceCriteria: string;
+  reviewWindowSeconds: number;
+  createdAt: string;
+  deliveredAt: string | null;
+  disputedAt: string | null;
+  settledAt: string | null;
+  run: OrderRun | null;
+}
+
+/**
+ * `POST /orders/:id/complain` (api-design §3.4), verbatim: a reason and nothing
+ * else. Accept has no body at all, which is why it has no request type here.
+ *
+ * Neither action's response is modelled, because neither is read. The poll's
+ * next read is the authority on what the order now is, so both wrappers return
+ * `Promise<void>` and discard whatever came back.
+ */
+export interface ComplainRequest {
+  reason: string;
+}
