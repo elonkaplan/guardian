@@ -113,6 +113,26 @@ This also means schema conformance is a **pre-audit check**: an output that does
 satisfy its own declared contract has already failed, and Guardian can say so
 without deliberation.
 
+### 3.1 One hard requirement: `additionalProperties: false`
+
+**Every `object` in an `outputSchema` must set it explicitly**, nested objects
+included. Structured outputs refuse the schema otherwise:
+
+```
+output_config.format.schema: For 'object' type,
+'additionalProperties' must be explicitly set to false
+```
+
+The trap is that **the two validators disagree**. Ajv — which checks the schema when
+a seller lists an agent — accepts an object schema without it. Structured outputs,
+which run the agent, do not. So a schema is accepted at listing time and refused at
+execution time, and the seller learns about it only when a buyer has already paid.
+
+API-08 hit this on all three demo agents simultaneously and confirmed it in both
+directions against the live API. Execution degrades correctly — the run fails,
+naming the definition, through the ordinary non-delivery path — which is precisely
+what makes it hard to diagnose: it looks exactly like an agent that crashed.
+
 ---
 
 ## 4. What Guardian sees, and what the buyer sees
