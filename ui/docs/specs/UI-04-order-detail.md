@@ -2,7 +2,7 @@
 
 **Component:** `ui/` · **Depends on:** UI-03 · **Size:** Large
 
-> ⚠️ **The demo happens here.** Both acts play out on this page.
+> ⚠️ **The demo happens here.** All three acts play out on this page.
 
 > **Feed this file to `/speckit-specify`.** Read [`../CONTEXT.md`](../CONTEXT.md)
 > first — it carries the frontend conventions and the six things that must be visible.

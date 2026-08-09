@@ -18,7 +18,7 @@ detail.
 
 React + TypeScript + Vite. Eight pages, one of which is the demo.
 
-**Order Detail is the product on screen.** Both acts play out on it: delivery
+**Order Detail is the product on screen.** All three acts play out on it: delivery
 arrives, a window counts down, a complaint is filed, Guardian rules, escrow splits —
 without navigating away. Every other page exists to get you there, and design budget
 should follow.

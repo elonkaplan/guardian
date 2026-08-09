@@ -1,9 +1,9 @@
 # `ui/` — Spec Breakdown
 
-> **For review.** How I'd split the frontend into speckit-sized specs. Nothing
-> implemented yet.
+> How the frontend is split into speckit-sized specs.
 
-Seven specs, dependency-ordered. Read [`CONTEXT.md`](./CONTEXT.md) first.
+Eight specs, dependency-ordered — **the last one runs the product rather than
+building it.** Read [`CONTEXT.md`](./CONTEXT.md) first.
 
 | # | Spec | Depends on | Size | Demo-critical |
 | --- | --- | --- | --- | --- |
@@ -14,6 +14,7 @@ Seven specs, dependency-ordered. Read [`CONTEXT.md`](./CONTEXT.md) first.
 | UI-05 | Verdict card & case file | 04 | M | ✅ |
 | UI-06 | Wallet page | 02 | M | ✅ |
 | UI-07 | Seller pages | 02 | M | ○ |
+| UI-08 | Verification pass & contract reconciliation | 01–07 **+ a live API** | M | ✅ |
 
 **Why UI-05 is separate from UI-04.** Order Detail is a state machine; the verdict
 card is a piece of argumentation. Splitting them means the card gets designed on its
@@ -89,7 +90,7 @@ make that consequence visible — a vague criterion is a weak case later.
 
 ## UI-04 — Order Detail (the hero page)
 
-⚠️ **The demo happens here.** Both acts play out on this page.
+⚠️ **The demo happens here.** All three acts play out on this page.
 
 **Deliver:** one page, five faces, driven by `orders.state`.
 
@@ -197,6 +198,32 @@ seller's view should read as such rather than looking like a missing feature.
 **Source:** ui-design §3 Flow B, agent-definition §2, product-workflow §7.5.
 
 
+## UI-08 — Verification pass & contract reconciliation
+
+**Deliver:** the first time any of this is seen working.
+
+UI-01…07 were built against **types describing an API that did not yet exist**. That
+is the right way to build in parallel and it has one failure mode, which has already
+happened once: UI-05's normaliser read `raw.clause` where the API sends `quote`.
+Shapes agreed, names did not, and nothing caught it — the raw fields are optional
+`unknown` by design, so a wrong name is an absent value, not a type error. It would
+have surfaced as an empty checklist in Act 2, on stage.
+
+- **Reconcile every boundary against real JSON** — names, not just shapes. Produce a
+  written note of what disagreed, even if that note says "nothing".
+- Render all eight pages against a seeded database, reached by clicking
+- **Run the three acts twice**, same verdicts both times
+- UI-05's carryovers: quickstart Parts B–F, 3m legibility, the greyscale check, long
+  clauses, the stranger test, and **T033** — delete `splitFor`'s subtraction if the
+  API sends `sellerMinor`
+- Check the redaction boundary in the **network response**, not the rendering
+
+**Done when** three acts run twice with identical verdicts, no page polls past a
+terminal state, and a buyer's case file carries no prompt text on the wire.
+
+**Source:** ui-design, product-workflow §5.3/§5.5, CONTEXT §3, commit `67dcf4d`.
+
+
 ## No automated tests in this component
 
 Time-boxed MVP decision: **only the escrow contract keeps a test suite** (`sc/`
@@ -222,6 +249,7 @@ Run these through `/speckit-specify` **in order** — each assumes the ones abov
 | 5 | UI-05 — Verdict card | [`specs/UI-05-verdict-card.md`](./specs/UI-05-verdict-card.md) |
 | 6 | UI-06 — Wallet page | [`specs/UI-06-wallet-page.md`](./specs/UI-06-wallet-page.md) |
 | 7 | UI-07 — Seller pages | [`specs/UI-07-seller-pages.md`](./specs/UI-07-seller-pages.md) |
+| 8 | UI-08 — Verification pass | [`specs/UI-08-verification-pass.md`](./specs/UI-08-verification-pass.md) |
 
 Each file is self-contained enough for one speckit run: goal, in/out of
 scope, acceptance criteria, and the specific traps for that slice.
