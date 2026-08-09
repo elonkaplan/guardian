@@ -63,13 +63,35 @@ export function useVerdict(orderId: string, state: OrderState): VerdictView {
       // reaching `settled` is the independent evidence that there is nothing left to
       // wait for, whatever the hash column says.
       isTerminal: (verdict) => verdict.txHash !== null || state === 'settled',
-      // 404 here is not "not yet": this hook only runs once the order itself says a
-      // ruling exists, so a 404 means the order and the backend disagree, and asking
-      // again every second will not settle the argument. 403 is someone else's order,
-      // which does not become ours by repetition. Anything else — a 500, a dropped
-      // connection — keeps retrying, because those are the failures that do resolve.
-      isFatalError: (failure) =>
-        failure.kind === 'http' && (failure.status === 404 || failure.status === 403),
+      // **Branch on the code, not the status.** This route is the one place in the
+      // API where two 404s mean opposite things, and it returns a bare
+      // `{ error: CODE }` body precisely so a client can tell them apart — the code
+      // is the only thing that distinguishes "this is not your order" from "the audit
+      // has not finished yet" (api/docs/openapi-divergences.md row 6, kept
+      // `intentional` for exactly this reason).
+      //
+      //   404 ORDER_NOT_FOUND   — no such order, or not ours. Terminal.
+      //   404 VERDICT_NOT_FOUND — our order, the audit is still running. KEEP POLLING.
+      //   409 AUDIT_FAILED      — the audit gave up. Terminal; no verdict will appear.
+      //
+      // Reading the status alone was wrong in both directions at once: it stopped on
+      // the one case that resolves by waiting, and retried the one that never does.
+      // The gate above (`adjudicated`/`settled`) narrows the window but does not close
+      // it — the order's state and the verdict row do not become visible in the same
+      // instant, and on a 1s poll one unlucky tick permanently killed the card.
+      //
+      // 403 stays fatal: someone else's order does not become ours by repetition.
+      // A 404 carrying no recognisable code stays fatal too, so nothing unfamiliar
+      // gains an infinite-poll path — the failure this predicate exists to prevent.
+      // Anything else — a 500, a dropped connection — keeps retrying, because those
+      // are the failures that do resolve.
+      isFatalError: (failure) => {
+        if (failure.kind !== 'http') return false;
+        if (failure.status === 403) return true;
+        if (failure.status === 409) return failure.code === 'AUDIT_FAILED';
+        if (failure.status === 404) return failure.code !== 'VERDICT_NOT_FOUND';
+        return false;
+      },
     },
   );
 

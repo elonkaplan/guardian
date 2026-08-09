@@ -70,6 +70,22 @@ export interface NonceRequest {
 
 export interface NonceResponse {
   nonce: string;
+  /**
+   * **The exact bytes to sign, and the only thing that may be signed.**
+   *
+   * Server-owned and multi-line: it embeds the address and the nonce in a
+   * format the backend reconstructs verbatim when it verifies. Signing the
+   * `nonce` instead — which this app did until UI-08 — produces a signature the
+   * backend cannot recover, and the failure surfaces as a bare
+   * `401 Signature verification failed` that reads exactly like a user
+   * declining the prompt. Confirmed live: same key, same nonce, signing `nonce`
+   * → 401, signing `message` → 201 (research R-01).
+   *
+   * Never recompose this from a template. The format is not ours, drift is
+   * invisible until it 401s, and there is no field on `VerifyRequest` to carry
+   * a client's idea of what it signed.
+   */
+  message: string;
 }
 
 export interface VerifyRequest {
@@ -595,6 +611,27 @@ export interface WithdrawResponse {
  */
 export interface OwnedAgent extends AgentSummary {
   active: boolean;
+  /**
+   * Whether the on-chain registration actually landed — **not** the same fact as
+   * `active`, and the reason both have to be on screen.
+   *
+   * `active` is the seller's own switch. `listed` is whether the chain agreed:
+   * `false` means the agent exists in Postgres with no on-chain counterpart, so
+   * no buyer can see or purchase it and `POST /agents/:id/versions` answers 409.
+   *
+   * **`active: true, listed: false` is the dangerous pair.** The availability
+   * control reads "On the market" while the agent is invisible to every buyer,
+   * and nothing else on the screen would say so — a seller advertising something
+   * nobody can buy, with no way to find out. The field arrives on this endpoint
+   * (`OwnedAgentResponse.listed`, required) and was being discarded at this type
+   * boundary until UI-08; the contract's own note says it is "worth surfacing in
+   * the UI" for exactly this reason.
+   *
+   * The public `GET /agents` excludes unregistered agents entirely, which is why
+   * this flag exists only here: the seller's list is the one screen that has to
+   * show an agent buyers cannot see.
+   */
+  listed: boolean;
 }
 
 /**

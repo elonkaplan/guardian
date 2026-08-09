@@ -140,8 +140,33 @@ function renderBody(
 
 function OwnedAgentRow({ agent }: { agent: OwnedAgent }): JSX.Element {
   return (
-    <li className={`owned-agents__row${agent.active ? '' : ' owned-agents__row--inactive'}`}>
+    <li
+      className={`owned-agents__row${agent.active ? '' : ' owned-agents__row--inactive'}${
+        agent.listed ? '' : ' owned-agents__row--unregistered'
+      }`}
+    >
       <span className="owned-agents__name">{agent.name}</span>
+      {/* The second fact this row has to carry, and the one nothing else on the
+          screen would say. `listed: false` means the on-chain registration never
+          landed, so no buyer can see or purchase this agent — while the
+          availability control beside it may cheerfully read "On the market".
+          That pair is the whole hazard: a seller advertising something nobody
+          can buy, with no way to find out (UI-08 R-03).
+
+          A word, for the same reason the availability state is a word: this
+          screen is demonstrated on a projector and screenshotted into decks that
+          end up greyscale, so a row tinted differently is not a row that says
+          anything. The `--unregistered` modifier exists so the stylesheet can
+          reinforce it and is never the thing carrying the meaning.
+
+          Rendered only when false. An agent that registered correctly is the
+          ordinary case and does not need a badge announcing that nothing is
+          wrong — a marker on every row is a marker nobody reads. */}
+      {agent.listed ? null : (
+        <span className="owned-agents__unregistered" title="On-chain registration did not complete, so this agent is not visible to buyers.">
+          Not registered — buyers cannot see this
+        </span>
+      )}
       {/* Through `formatUsd` like every other amount in the app: `priceMinor`
           is integer cents, and cents printed raw read as a hundredfold
           overcharge. */}

@@ -3231,6 +3231,30 @@ code {
   color: var(--color-text-muted);
 }
 
+/* An agent whose on-chain registration never landed. A different fact from
+   `--inactive` and shown at the same time as it when both are true: the seller
+   switched it on, and the chain never agreed.
+
+   The border is the reinforcement, the words are the signal. Everything here
+   survives desaturation — a left border reads as a left border in greyscale,
+   and the badge says what is wrong in text, so neither the projector nor a
+   colour-blind reader loses the one fact that makes this row different from a
+   healthy one. */
+.owned-agents__row--unregistered {
+  border-left: 3px solid var(--color-text-muted);
+  padding-left: var(--space-2);
+}
+
+.owned-agents__unregistered {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+}
+
 .owned-agents__empty {
   display: flex;
   flex-direction: column;

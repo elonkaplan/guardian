@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { CaseFileStep } from '../api/types';
+import type { Perspective } from '../lib/perspective';
 
 interface ExecutionStepsProps {
   /**
@@ -8,6 +9,11 @@ interface ExecutionStepsProps {
    * this component invented would be a different account of what happened.
    */
   steps: CaseFileStep[];
+  /**
+   * Which party is reading. Needed only for the empty state, where an empty list
+   * means two different things depending on who is asking — see the note there.
+   */
+  perspective: Perspective;
 }
 
 /**
@@ -50,14 +56,33 @@ interface ExecutionStepsProps {
  * output is short — and hiding it to keep the list looking tidy would suppress
  * evidence in favour of the party whose agent broke.
  */
-export function ExecutionSteps({ steps }: ExecutionStepsProps): JSX.Element {
+export function ExecutionSteps({ steps, perspective }: ExecutionStepsProps): JSX.Element {
   // Not an empty region. "No steps were recorded" and "the agent did nothing"
   // are different claims, and a bare gap invites the reader to supply whichever
   // one suits their mood. It says which it means.
+  //
+  // **And which it means depends on who is reading.** The API returns
+  // `steps: []` to a buyer *unconditionally* — `findCaseFileForBuyer` does not
+  // select the trace at all, so a buyer's empty list carries no information
+  // about the run whatsoever. The seller's copy of the same order carries the
+  // populated trace. Telling a buyer "no execution steps were recorded" is
+  // therefore a false statement about their order, and the worst kind: it reads
+  // as evidence that the agent did nothing, on the screen where they are
+  // deciding whether they were treated fairly.
+  //
+  // This is a known API defect, not a frontend one — `api-wrong` row 5 of
+  // `api/docs/openapi-divergences.md`, marked `DO NOT ADOPT`. It is escalated
+  // rather than worked around: this app does not fetch the seller's endpoint, does
+  // not synthesise steps, and does not hide the section as though the design never
+  // called for it. It says what is true, which is that the trace is not in what
+  // the server sent. When the API starts populating a buyer's trace, this branch
+  // simply stops being reached.
   if (steps.length === 0) {
     return (
       <p className="exec-steps__empty">
-        No execution steps were recorded for this order.
+        {perspective === 'buyer'
+          ? 'The execution trace is not included in a buyer’s copy of the case file. This is not a statement about what the agent did.'
+          : 'No execution steps were recorded for this order.'}
       </p>
     );
   }

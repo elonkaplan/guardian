@@ -127,8 +127,16 @@ export type SplitResult =
  * look at the data; a tidy wrong number does not.
  *
  * `ok: false` should be unreachable against a correct backend. It is here
- * because this is a client of an API that does not exist yet, and because the
- * cost of being wrong is a card claiming the wrong split on stage.
+ * because the cost of being wrong is a card claiming the wrong split on stage.
+ *
+ * **UI-05's T033 is discharged, and the answer is: keep the subtraction.** The
+ * carryover said to delete this arithmetic and its reconciliation guard *if* the
+ * API turned out to send the seller's share directly. It does not. The published
+ * contract's `VerdictResponse` requires exactly `tier`, `refundMinor`,
+ * `reasoning`, `citations`, `txHash`, `model`, and `createdAt` — there is no
+ * `sellerMinor` on the wire, so there is no figure to prefer over this one and
+ * nothing here to delete. Verified against `api/docs/openapi.yaml` in UI-08
+ * (research R-11). If the API ever adds it, this is the function to revisit.
  */
 export function splitFor(priceMinor: Cents, refundMinor: Cents): SplitResult {
   const reconcilable =

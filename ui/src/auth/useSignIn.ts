@@ -3,6 +3,7 @@ import { useConnect, useConnectors, useSignMessage } from 'wagmi';
 import type { Connector } from 'wagmi';
 
 import { requestNonce, verifySignature } from '../api/auth';
+import type { NonceResponse } from '../api/types';
 import { isConnectivityError, isApiError } from '../api/errors';
 import { useAuth } from './AuthContext';
 import { classifyWalletError, walletErrorMessage } from '../chain/walletErrors';
@@ -156,21 +157,28 @@ export function useSignIn(): UseSignInResult {
         // A fresh nonce every attempt. One left over from an abandoned attempt
         // is already spent as far as the backend is concerned.
         setPhase('requesting-nonce');
-        let nonce: string;
+        let challenge: NonceResponse;
         try {
-          nonce = (await requestNonce(address)).nonce;
+          challenge = await requestNonce(address);
         } catch (error) {
           setFailure(backendFailure(error));
           return { ok: false };
         }
 
-        // The one signature this application ever requests. The message is the
-        // nonce verbatim: `/auth/verify` carries no message field, so the
-        // backend reconstructs what it issued.
+        // The one signature this application ever requests, over `message` and
+        // never over `nonce`.
+        //
+        // `/auth/verify` carries no message field, so the backend reconstructs
+        // what it issued and recovers the address from the signature — which
+        // means the bytes have to match byte for byte. `message` is that string:
+        // multi-line, server-owned, with the address and the nonce embedded.
+        // Signing the bare nonce (which this did until UI-08) recovers a
+        // different address and returns `401 Signature verification failed`,
+        // indistinguishable on screen from the user declining the prompt.
         setPhase('awaiting-signature');
         let signature;
         try {
-          signature = await signMessageAsync({ message: nonce, account: address });
+          signature = await signMessageAsync({ message: challenge.message, account: address });
         } catch (error) {
           setFailure(walletFailure(error, 'sign'));
           return { ok: false };
