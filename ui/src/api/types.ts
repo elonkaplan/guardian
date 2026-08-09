@@ -1,3 +1,5 @@
+import type { Address, Hex } from 'viem';
+
 import type { Cents } from '../lib/money';
 
 /**
@@ -28,4 +30,36 @@ export interface AccountSummary {
   address: string;
   availableBalanceMinor: Cents;
   inEscrowMinor: Cents;
+}
+
+/**
+ * `POST /auth/nonce` then `POST /auth/verify` (api-design §3.1).
+ *
+ * The message signed is the `nonce` value verbatim, as a personal message. Note
+ * what the verify payload does not carry: a message field. The backend has to
+ * reconstruct what it issued, which is why a structured sign-in message
+ * (SIWE-style, with domain and statement) is not used here — it would have
+ * nowhere to travel.
+ *
+ * The first successful verify creates the account. Connecting a wallet is the
+ * whole of registration: no password, no email.
+ *
+ * NOTE: field names are provisional, for the same reason as `AccountSummary`
+ * above.
+ */
+export interface NonceRequest {
+  address: Address;
+}
+
+export interface NonceResponse {
+  nonce: string;
+}
+
+export interface VerifyRequest {
+  address: Address;
+  signature: Hex;
+}
+
+export interface VerifyResponse {
+  token: string;
 }

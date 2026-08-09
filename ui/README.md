@@ -10,6 +10,8 @@ cp .env.example .env.local     # set VITE_API_URL
 npm run dev                    # → http://localhost:5173
 ```
 
+**You need a browser wallet extension** (MetaMask or similar) in whatever browser you test with. Connecting one is the entire registration flow — there is no password and no email — so without an extension the entry screen can only tell you to install one. Point it at **Monad Testnet** (chain `10143`); the app detects any other network and offers to switch, and will add the network for you if the wallet doesn't know it yet.
+
 Or, for a clean one-command start:
 
 ```bash
@@ -47,7 +49,9 @@ grep -ri "PRIVATE_KEY\|MNEMONIC\|SECRET" dist/    # expect no hits
 ```
 src/
 ├── api/         the only way out of the app — client, errors, session, types
-├── components/  app shell, balance widget, shared placeholders
+├── auth/        AuthContext (who is signed in) and useSignIn (the whole flow)
+├── chain/       chain definition, wagmi config, wallet error classification
+├── components/  app shell, balance widget, route guard, wallet menu, banner
 ├── hooks/       usePolling — the shared refresh mechanism
 ├── lib/         money formatting, query client
 ├── pages/       one file per screen
@@ -61,11 +65,18 @@ src/
 
 **No route strings outside `src/routes/paths.ts`.** Link targets come from the path builders. A typo in an inline template literal is invisible until someone clicks it.
 
-Both are checked by grep, since there is no linter configured:
+**The wallet signs exactly one thing: the auth nonce.** Every chain write goes through the operator, server-side. The UI never calls the escrow contract and never holds a key.
+
+**Explorer URLs come only from `src/chain/chains.ts`.** viem's built-in `monadTestnet` points at the older `monadexplorer.com` host, which redirects — we override it to MonadVision in one place so a second hardcoded copy can't disagree.
+
+All four are checked by grep, since there is no linter configured:
 
 ```bash
 grep -rnE "\bfetch\(" src/                                          # only src/api/client.ts
 grep -rnE "\"/(agents|orders|wallet|sell)|'/(agents|orders|wallet|sell)" src/ | grep -v paths.ts   # nothing
+grep -rn "signMessage" src/                                         # only src/auth/useSignIn.ts
+grep -rniE "sendTransaction|useWriteContract|privateKey|mnemonic"  src/   # nothing
+grep -rn "monadvision\|monadexplorer" src/                          # only src/chain/chains.ts
 ```
 
 ## Manual verification
@@ -77,5 +88,6 @@ There is no test suite, so acceptance is by hand: `specs/001-ui-foundation/quick
 - **`/__poll-test`** is a DEV-only harness for `usePolling` (stop-on-terminal, unmount cleanup, no overlap). It is gated on `import.meta.env.DEV` and absent from production builds. It expects a backend serving `/stub/order?after=N&key=…`; against the real API, point it at an order instead.
 - **Polling continues while the tab is hidden** (`refetchIntervalInBackground: true`). React Query pauses intervals for hidden documents, and on macOS an *occluded* window counts as hidden — which would mean the order page stops updating whenever a terminal covers the browser. Act 1 depends on that page flipping on its own, so the pause is switched off. Chrome still throttles background timers, so expect roughly double the configured interval while hidden.
 - `StrictMode` is on in development, which double-invokes effects on mount. That is intentional — it surfaces exactly the cleanup bugs the polling hook must not have. Expect paired requests in the Network panel during dev; production builds fire once.
-- `BalanceWidget` uses a minimal `useHasSession` stand-in that just checks for a stored token. UI-02 owns real session state and should replace it with a context.
-- `src/chain/` does not exist yet. wagmi and viem arrive with UI-02.
+- **wagmi v3 renamed the account hooks.** Use `useConnection` / `useConnectionEffect`; `useAccount` / `useAccountEffect` still work but are deprecated aliases, and every tutorial online shows the old names.
+- **Identity is the stored credential, never wagmi's connection state.** A locked or slow-to-reconnect wallet must not sign the user out — see the comment at the top of `src/auth/AuthContext.tsx`. Nothing after sign-in needs the wallet.
+- **Sign-in is one imperative async function**, not an effect watching the address. An effect fires a signature prompt when the user switches accounts, which is exactly what must not happen.

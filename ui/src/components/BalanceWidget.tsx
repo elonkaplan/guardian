@@ -1,35 +1,10 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { fetchMe } from '../api/me';
-import { UNAUTHENTICATED_EVENT, readToken } from '../api/session';
+import { useAuth } from '../auth/AuthContext';
 import { usePolling } from '../hooks/usePolling';
 import { formatUsd } from '../lib/money';
 import { paths } from '../routes/paths';
-
-/**
- * Whether a session credential is present.
- *
- * A deliberately small stand-in: UI-02 owns real session state and will replace
- * this with a context. Until then the widget needs *some* reactive answer, and
- * "a token exists" is the honest one. Listening for the unauthenticated event
- * is what makes it flip when the API rejects us.
- */
-function useHasSession(): boolean {
-  const [hasSession, setHasSession] = useState(() => readToken() !== null);
-
-  useEffect(() => {
-    const sync = () => setHasSession(readToken() !== null);
-    window.addEventListener(UNAUTHENTICATED_EVENT, sync);
-    window.addEventListener('storage', sync);
-    return () => {
-      window.removeEventListener(UNAUTHENTICATED_EVENT, sync);
-      window.removeEventListener('storage', sync);
-    };
-  }, []);
-
-  return hasSession;
-}
 
 /**
  * Two money figures in the header, never one.
@@ -40,14 +15,14 @@ function useHasSession(): boolean {
  * question a judge asks.
  */
 export function BalanceWidget() {
-  const hasSession = useHasSession();
+  const { isSignedIn } = useAuth();
 
   const { data, error } = usePolling(['me'], fetchMe, {
     intervalMs: 5_000,
-    enabled: hasSession,
+    enabled: isSignedIn,
   });
 
-  if (!hasSession) {
+  if (!isSignedIn) {
     return (
       <Link to={paths.connect()} className="balance">
         <span className="balance__figure">

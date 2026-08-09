@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 
 import { AppShell } from '../components/AppShell';
+import { RequireAuth } from '../components/RequireAuth';
 import { AgentDetailPage } from '../pages/AgentDetailPage';
 import { ConnectPage } from '../pages/ConnectPage';
 import { CreateAgentPage } from '../pages/CreateAgentPage';
@@ -27,11 +28,52 @@ export function AppRoutes() {
         <Route path={routePatterns.connect} element={<ConnectPage />} />
         <Route path={routePatterns.marketplace} element={<MarketplacePage />} />
         <Route path={routePatterns.agentDetail} element={<AgentDetailPage />} />
-        <Route path={routePatterns.orders} element={<MyOrdersPage />} />
-        <Route path={routePatterns.orderDetail} element={<OrderDetailPage />} />
-        <Route path={routePatterns.wallet} element={<WalletPage />} />
-        <Route path={routePatterns.sell} element={<MyAgentsPage />} />
-        <Route path={routePatterns.createAgent} element={<CreateAgentPage />} />
+        {/*
+          Guarded: your orders, your money, your listings. The catalogue above
+          stays public because `GET /agents` and `GET /agents/:id` are public in
+          api-design §3.3 — guarding them here would contradict the backend and
+          make the product feel closed for no reason.
+        */}
+        <Route
+          path={routePatterns.orders}
+          element={
+            <RequireAuth>
+              <MyOrdersPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path={routePatterns.orderDetail}
+          element={
+            <RequireAuth>
+              <OrderDetailPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path={routePatterns.wallet}
+          element={
+            <RequireAuth>
+              <WalletPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path={routePatterns.sell}
+          element={
+            <RequireAuth>
+              <MyAgentsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path={routePatterns.createAgent}
+          element={
+            <RequireAuth>
+              <CreateAgentPage />
+            </RequireAuth>
+          }
+        />
         {/* Dev-only harness for quickstart Part C. Absent from production builds. */}
         {import.meta.env.DEV ? <Route path="/__poll-test" element={<PollTestPage />} /> : null}
         <Route path="*" element={<NotFoundPage />} />

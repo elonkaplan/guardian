@@ -4,6 +4,8 @@ import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { UNAUTHENTICATED_EVENT } from '../api/session';
 import { paths } from '../routes/paths';
 import { BalanceWidget } from './BalanceWidget';
+import { NetworkBanner } from './NetworkBanner';
+import { WalletMenu } from './WalletMenu';
 
 /**
  * The layout route every screen renders inside.
@@ -38,7 +40,10 @@ export function AppShell() {
           <Link to={paths.sell()}>Sell</Link>
         </nav>
         <BalanceWidget />
+        <WalletMenu />
       </header>
+      {/* Above the outlet, so it is on every screen and no page can forget it. */}
+      <NetworkBanner />
       <main className="shell__main">
         <Outlet />
       </main>
