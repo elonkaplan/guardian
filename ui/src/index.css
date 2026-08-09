@@ -463,3 +463,547 @@ code {
   white-space: pre-wrap;
   color: var(--color-text);
 }
+
+/* ---- Load states (loading / empty / error) ---- */
+
+/*
+  Empty and error must not look alike. Empty is the system telling the truth in
+  a level voice; error is something broken, and only it gets a danger colour and
+  a button.
+*/
+
+.load-state {
+  padding: var(--space-6) 0;
+  color: var(--color-text-muted);
+}
+
+.load-state__message {
+  margin: 0;
+}
+
+.load-state--error .load-state__message {
+  color: var(--color-danger);
+}
+
+.load-state__retry {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.load-state__retry:hover {
+  border-color: var(--color-accent);
+}
+
+.load-state__retry:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ---- Marketplace ---- */
+
+.marketplace__title {
+  margin: 0 0 var(--space-2);
+}
+
+.marketplace__lede {
+  margin: 0 0 var(--space-6);
+  max-width: 46rem;
+  color: var(--color-text-muted);
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--space-4);
+}
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.agent-card:hover {
+  border-color: var(--color-accent);
+  text-decoration: none;
+}
+
+.agent-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.agent-card__name {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.agent-card__description {
+  margin: 0;
+  flex: 1;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* Legible at a glance: a buyer should tell a $2 job from a $20 one while scanning. */
+
+.agent-card__price {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--color-text);
+}
+
+/* ---- Agent detail ---- */
+
+.detail {
+  max-width: 46rem;
+}
+
+.detail__breadcrumb {
+  margin: 0 0 var(--space-4);
+  font-size: 0.9rem;
+}
+
+.detail__name {
+  margin: 0 0 var(--space-2);
+}
+
+.detail__description {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.detail__price,
+.buy__price-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-6);
+}
+
+.detail__price-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.detail__price-amount {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+}
+
+.detail__missing-note {
+  color: var(--color-text-muted);
+}
+
+.detail__contract-shape {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-6) 0;
+}
+
+.detail__shape-heading {
+  margin: 0 0 var(--space-1);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.detail__shape-note {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* ---- Contract terms ---- */
+
+/*
+  Two groups that must not blur together — a buyer skimming a merged wall of
+  lines can read a limit as a promise. Same weight for both: exclusions are not
+  fine print, they are how a seller defends itself, and hiding them behind a
+  disclosure would make every verdict that cites one look like a trap.
+*/
+
+.terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--space-4);
+  margin: var(--space-6) 0;
+}
+
+.terms__group {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.terms__group--capabilities {
+  border-left: 3px solid var(--color-positive);
+}
+
+.terms__group--exclusions {
+  border-left: 3px solid var(--color-warning);
+}
+
+.terms__heading {
+  margin: 0 0 var(--space-1);
+  font-size: 1rem;
+}
+
+.terms__note {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.terms__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.terms__item {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  align-items: start;
+  font-size: 0.95rem;
+}
+
+.terms__marker {
+  font-family: var(--font-mono);
+}
+
+.terms__group--capabilities .terms__marker {
+  color: var(--color-positive);
+}
+
+.terms__group--exclusions .terms__marker {
+  color: var(--color-warning);
+}
+
+.terms__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+/* ---- Buy form ---- */
+
+.buy {
+  margin-top: var(--space-8);
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.buy__heading {
+  margin: 0 0 var(--space-4);
+  font-size: 1.1rem;
+}
+
+.fields,
+.buy__form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.field__label,
+.criteria__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.field__required {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.field__help {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.field__control,
+.criteria__input,
+.raw-input__control {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+.raw-input__control {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.field__control:focus-visible,
+.criteria__input:focus-visible,
+.raw-input__control:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.field__control:disabled,
+.criteria__input:disabled,
+.raw-input__control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.field--checkbox .field__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 400;
+}
+
+.field--checkbox .field__control {
+  width: auto;
+}
+
+.field__error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+
+/* ---- Raw JSON fallback ---- */
+
+.raw-input {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.raw-input__reason {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.raw-input__caption {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.raw-input__schema {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  max-height: 14rem;
+  overflow: auto;
+}
+
+/* ---- Acceptance criteria ---- */
+
+/*
+  The copy around this field is doing real work, so it is styled to be read
+  rather than skipped: no warning box, no danger colour, nothing that pattern-
+  matches to boilerplate a buyer has learned to click past.
+*/
+
+.criteria {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+
+.criteria__consequence {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.criteria__example {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.criteria__example p {
+  margin: 0;
+}
+
+.criteria__example-good {
+  color: var(--color-positive);
+}
+
+.criteria__example-weak {
+  color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
+.criteria__error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+
+/* A nudge, not a stop — warm, and never the danger colour. */
+
+.criteria__warning {
+  margin: 0;
+  color: var(--color-warning);
+  font-size: 0.85rem;
+}
+
+/* ---- Affordability and submit ---- */
+
+/*
+  Two figures, never one. Available balance and price are different quantities
+  with different meanings, and collapsing them into "you can afford this" is
+  how a ledger starts looking broken.
+*/
+
+.buy__figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.buy__figure {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.buy__figure-label {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.buy__figure-amount {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+}
+
+/* Information, not a failure: the buyer has done nothing wrong by being short. */
+
+.buy__shortfall {
+  margin: 0;
+  color: var(--color-warning);
+  font-size: 0.9rem;
+}
+
+.buy__balance-unknown {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.buy__submit {
+  justify-self: start;
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  background: var(--color-accent);
+  color: #0b1020;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.buy__submit:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.buy__submit:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.buy__submit:disabled {
+  border-color: var(--color-border);
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+.buy__error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+/*
+  The ambiguous branch. Warm rather than red: nothing has necessarily gone
+  wrong, we simply do not know — and the one thing the buyer must not do is
+  press buy again.
+*/
+
+.buy__ambiguous {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius);
+  color: var(--color-warning);
+  font-size: 0.9rem;
+}
+
+.buy--signed-out {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.buy__signin-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.buy__signin {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  color: var(--color-accent);
+}
+
+.buy__signin:hover {
+  text-decoration: none;
+  background: rgb(110 168 254 / 12%);
+}
