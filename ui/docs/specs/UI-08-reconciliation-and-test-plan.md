@@ -58,6 +58,16 @@ described faithfully. The divergence report is where API-12 diffed the code agai
 Check, per endpoint and per type:
 
 - **Field names.** Compare strings, not shapes. This is the bug class above.
+- **Fields the contract sends that no UI type declares — walk the contract, not the
+  types.** Every other check here starts from a UI type and looks for a mismatch,
+  which cannot see a field that is simply missing: it arrives on the wire, is ignored,
+  and nothing anywhere reports a problem. **One is known already** —
+  `OwnedAgentResponse.listed` (API-06). It is `false` when an agent exists in Postgres
+  but its `registerAgent` never confirmed, and UI-07's `OwnedAgent` and
+  `OwnedAgentList` do not declare it, **so a seller currently sees an unregistered
+  agent rendered as a healthy one.** That agent cannot be bought, and the seller has
+  no way to know. Fix it, and treat it as evidence that this direction needs walking
+  in full rather than spot-checked.
 - **Enum members, exhaustively** — `OrderState` (8), `LedgerKind` (4),
   `CitationSource` (3), tiers. The UI's switches have no `default`, so a member the
   API can emit and the UI cannot render **throws**.
@@ -129,7 +139,9 @@ split in dollars, and what appears on screen at every state change. Explicitly:
 - Balance figures move when an order settles
 
 **§3 Seller flow** — list an agent, see it in the marketplace, toggle it inactive,
-watch it leave, **toggle it back**. That last step is the one that catches an
+watch it leave, **toggle it back**. Include a step for an agent with
+`listed: false`: it must be visibly distinguished on the seller's own list, since it
+cannot be bought and nothing else on the screen would say so. That last step is the one that catches an
 `?owner=me` filtered to active, which looks like a working feature until someone
 tries to undo it. Then: open a disputed sale as the seller and confirm the case file
 and verdict are readable, and that there is no reply control.
