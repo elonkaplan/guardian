@@ -31,10 +31,18 @@ COPY . .
 #   1. `--build-arg VITE_API_URL=…`  — wins if given
 #   2. `ui/.env.production`          — used otherwise
 #
-# ⚠️ The arg is NOT promoted to ENV unconditionally. Doing that sets it to the
-# empty string when no arg is passed, which then out-prioritises .env.production
-# and compiles an empty base URL into the bundle — a frontend that calls the
-# wrong host, with nothing at build or run time saying so.
+# ⚠️ **`unset` below is load-bearing, and the reason is not obvious.**
+#
+# Docker exposes an ARG to every RUN instruction as an environment variable —
+# declaring `ARG VITE_API_URL=""` puts VITE_API_URL="" into the build shell even
+# when no --build-arg is passed. Vite gives real environment variables the
+# highest priority and never overwrites them from a .env file, so that empty
+# string silently beats .env.production and compiles an empty base URL into the
+# bundle. The build succeeds, nothing warns, and the app throws ConfigError in
+# the browser instead.
+#
+# Avoiding `ENV` is not enough. The ARG alone does it. The variable has to be
+# removed from the environment before Vite runs.
 ARG VITE_API_URL=""
 
 RUN test -n "$VITE_API_URL" || grep -qE '^VITE_API_URL=.+' .env.production || \
@@ -43,8 +51,13 @@ RUN test -n "$VITE_API_URL" || grep -qE '^VITE_API_URL=.+' .env.production || \
 RUN if [ -n "$VITE_API_URL" ]; then \
       VITE_API_URL="$VITE_API_URL" npm run build; \
     else \
-      npm run build; \
+      unset VITE_API_URL && npm run build; \
     fi
+
+# Fail here rather than in someone's browser: if the base URL did not make it
+# into the bundle, the app is broken in a way only a page load reveals.
+RUN grep -rqE 'https?://[^"]+' dist/assets/*.js || \
+    (echo "build produced no API base URL — VITE_API_URL did not reach Vite" && exit 1)
 
 FROM nginx:alpine
 
