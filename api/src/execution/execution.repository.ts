@@ -299,7 +299,36 @@ export class ExecutionRepository {
       .getRepository(Order)
       .update(
         { id: orderId, state: OrderState.Running },
-        { state: OrderState.Delivered },
+        // ⚠️ `deliveredAt` is written HERE and nowhere else. Until API-10 this
+        // column was never written at all, and two things were silently broken
+        // by its absence — both of which read as "the code is fine" because the
+        // column is nullable and NULL comparisons simply produce no rows:
+        //
+        //  1. **The sweeper could never fire.** Its predicate is
+        //     `delivered_at + review_window <= now()`, which is NULL for every
+        //     row when the column is NULL, so no order was ever selected and no
+        //     seller was ever paid automatically. That is the whole of Act 1's
+        //     ending (`jobs/sweeper.job.ts`).
+        //  2. **The complaint window never closed.** `settlement.service.ts`'s
+        //     `assertWindowOpen` returns early on a NULL `delivered_at`, which is
+        //     correct and deliberate for a `failed` order — nothing was
+        //     delivered, so no window ever opened, and Act 3 must not be refused
+        //     by one. With the column never written, *every* order took that
+        //     branch and a buyer could complain indefinitely. The money stayed
+        //     safe only because the on-chain `dispute` reverts `"window closed"`
+        //     on its own — the API said yes and the contract said no.
+        //
+        // `markFailed` deliberately does NOT set it, which is what keeps that
+        // early return meaning what it says.
+        //
+        // ⚠️ This is OUR receipt time, not the contract's `block.timestamp`.
+        // The two differ by the time it takes a receipt to come back, and the
+        // direction is the safe one: ours is *later*, so the sweeper asks to
+        // release slightly after the chain would already permit it, rather than
+        // before. The reverse — deriving it from block time — would need an extra
+        // `eth_call` on the delivery hot path to buy a revert we are already
+        // designed to tolerate (`specs/010-cron-jobs/research.md` R6).
+        { state: OrderState.Delivered, deliveredAt: new Date() },
       );
 
     return (result.affected ?? 0) > 0;

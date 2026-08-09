@@ -43,12 +43,23 @@ import { GuardianService } from './guardian.service';
  * The settle pass runs **first** each tick, so an order stuck one step from done
  * is finished before a new audit is started.
  *
- * ## No `@nestjs/schedule`
+ * ## No `@nestjs/schedule` — and API-10 did not add it
  *
  * Same conclusion API-08 reached and it has not changed: `@Interval` fires on a
  * fixed cadence whether or not the previous tick finished, so the re-entrancy
  * guard below has to be hand-written either way — and that guard is the only
- * part carrying risk. API-10 standardises this; it is a five-line change then.
+ * part carrying risk.
+ *
+ * API-10 declined the library rather than adopting it. Its sweeper reads its
+ * cadence from `SWEEPER_INTERVAL_MS`, and `@Interval(ms)` takes a compile-time
+ * constant — so the one job with the strongest case for a decorator could not
+ * have used one. The standardisation is `src/jobs/polling-job.ts`, a base class
+ * that owns the timer, the guard and the teardown
+ * (`specs/010-cron-jobs/research.md` R1).
+ *
+ * **This poller can adopt it as a pure deletion**, once that file moves to
+ * `src/common/` — `guardian/` importing from `jobs/` inverts the dependency.
+ * Deliberately not done here; both pollers work and both are load-bearing.
  *
  * ## Quiet by default
  *

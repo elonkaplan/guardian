@@ -127,7 +127,22 @@ export const GAS_LIMITS = {
   /** ESTIMATED: 2 SSTOREs + event, same shape as `markDelivered`. */
   dispute: 100_000n,
 
-  /** ESTIMATED: same shape as `release`. */
+  /**
+   * ESTIMATED: same shape as `release`.
+   *
+   * ⚠️ **Now sent by a live job** — API-10's reclaimer calls this unattended,
+   * every five minutes, against any deal past its 24-hour `DELIVERY_DEADLINE`.
+   * It is still the only ceiling in this table that no transaction has ever
+   * exercised against the deployment, because reaching it takes a full day.
+   * `release` is the better-evidenced half of the pair and this is derived from
+   * it: both end in `_payout`-shaped work — one `SSTORE` for the state, one for
+   * `totalEscrowed`, one balance credit, one event.
+   *
+   * If a `reclaim` ever simulates cleanly and reverts once mined,
+   * `executeWrite` raises `GasExhaustedError` and this number is the first thing
+   * to check. Measure it with `measureGas`, not with `receipt.gasUsed` — on this
+   * chain the receipt reports the charge, which is always the ceiling.
+   */
   reclaim: 130_000n,
 
   /** ESTIMATED: `release` plus a second balance credit. */

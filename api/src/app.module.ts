@@ -10,6 +10,7 @@ import { ExecutionModule } from './execution/execution.module';
 import { GuardianModule } from './guardian/guardian.module';
 import { FundingModule } from './funding/funding.module';
 import { HealthModule } from './health/health.module';
+import { JobsModule } from './jobs/jobs.module';
 import { LedgerModule } from './ledger/ledger.module';
 import { OrdersModule } from './orders/orders.module';
 import { RainModule } from './rain/rain.module';
@@ -34,6 +35,15 @@ import { RainModule } from './rain/rain.module';
  * thing that turns a purchased order into a run — so an unregistered module here
  * would leave every purchase parked in `purchased` with the money escrowed and
  * no worker coming.
+ *
+ * `JobsModule` is the same argument at the other end of the lifecycle, and it is
+ * the strongest instance of it in this file. It has no controller, no export,
+ * and nothing anywhere imports it; this line is the whole trigger, because its
+ * three jobs start themselves on application bootstrap. Leaving it unregistered
+ * would leave every delivered order parked in `delivered` with the seller unpaid
+ * — the escrow will permit `release` after the review window and will never do
+ * it unprompted — every abandoned run stuck in `running` forever, and every
+ * undelivered deal holding a buyer's money past its deadline.
  */
 @Module({
   imports: [
@@ -46,6 +56,7 @@ import { RainModule } from './rain/rain.module';
     CatalogModule,
     ExecutionModule,
     GuardianModule,
+    JobsModule,
     AccountsModule,
     FundingModule,
     RainModule,

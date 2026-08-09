@@ -27,13 +27,26 @@ import { ExecutionService } from './execution.service';
  * nobody holding a promise to run it. The next tick finds it; an in-process call
  * from the purchase never would.
  *
- * ## No `@nestjs/schedule`
+ * ## No `@nestjs/schedule` — and API-10 did not introduce it either
  *
- * API-10 will introduce it, and standardising then is a five-line change.
- * Adding it here buys nothing today: `@Interval` fires on a fixed cadence
+ * The objection this file raised stands: `@Interval` fires on a fixed cadence
  * whether or not the previous tick finished, so the re-entrancy guard below has
  * to be hand-written either way — and that guard is the only part carrying risk
  * (research R1).
+ *
+ * API-10 went further and declined the dependency outright, for a reason this
+ * file could not have known: `@Interval(ms)` takes a **compile-time constant**,
+ * so its sweeper — whose cadence is the `SWEEPER_INTERVAL_MS` environment key —
+ * could not have used the decorator at all. What it standardised on instead is
+ * `src/jobs/polling-job.ts`, a base class owning the timer, the guard and the
+ * teardown (`specs/010-cron-jobs/research.md` R1).
+ *
+ * **This poller can adopt that base as a pure deletion** — `timer`, `draining`,
+ * `stopping`, `onApplicationBootstrap` and `onModuleDestroy` below are it line
+ * for line, and `drain()` becomes `runOnce()`. Doing so also means moving that
+ * file to `src/common/`, since `execution/` importing from `jobs/` inverts the
+ * dependency. Deliberately not done: this module works and is load-bearing for
+ * the demo, and destabilising it to remove duplication is the wrong trade.
  *
  * ## Quiet by default
  *
