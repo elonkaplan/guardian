@@ -14,6 +14,8 @@ import {
 
 import type { AppConfig } from '../config/env.schema';
 import { erc20Abi } from './abi/erc20.abi';
+import { decodeRevert } from './decode-revert';
+import { ChainError } from './errors';
 import { escrowOperatorAbi } from './abi/escrow-operator.abi';
 import { ALLOWANCE_TOPUP_CENTS } from './chain.constants';
 import { OPERATOR_CLIENT, PUBLIC_CLIENT } from './chain.tokens';
@@ -145,12 +147,14 @@ export class EscrowOperatorService {
     const operator = this.operatorClient.account.address;
     const required = toBaseUnits(requiredCents);
 
-    const current = await this.publicClient.readContract({
-      address: this.usdc,
-      abi: erc20Abi,
-      functionName: 'allowance',
-      args: [operator, this.escrow],
-    });
+    const current = await this.read('allowance', () =>
+      this.publicClient.readContract({
+        address: this.usdc,
+        abi: erc20Abi,
+        functionName: 'allowance',
+        args: [operator, this.escrow],
+      }),
+    );
 
     if (current >= required) {
       // Logged in base units deliberately: the live allowance is unbounded and
@@ -305,9 +309,38 @@ export class EscrowOperatorService {
     );
   }
 
+  /**
+   * Wrap a read in the module's error vocabulary.
+   *
+   * ⚠️ **The two reads in this class are as capable of failing as the writes,
+   * and until this existed they were the only calls in `chain/` that could
+   * escape as a raw viem error.** `EscrowReadService` has always wrapped its
+   * reads with the same note — *"FR-010's named-failure requirement is not
+   * limited to writes"* — but `openDeal`'s two pre-reads live here, and they were
+   * missed.
+   *
+   * The symptom is specific and was found by
+   * `api/scripts/verify-007-failure.mjs`: with the RPC unreachable, `openDeal`
+   * fails inside `readAgentPriceCents` before it ever broadcasts. An unwrapped
+   * `HttpRequestError` is not a `ChainError`, so `common/chain-http.ts` reaches
+   * its final `throw err` and the caller gets a bare `500 Internal server
+   * error` — for a condition that is entirely knowable and that the purchase
+   * saga had already handled correctly by compensating the buyer. The money was
+   * right and only the status code lied.
+   */
+  private async read<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err instanceof ChainError) throw err;
+      throw decodeRevert(err, operation);
+    }
+  }
+
   /** The agent's escrowed price, in cents — used to size the allowance check. */
   private async readAgentPriceCents(agentId: bigint): Promise<number> {
-    const [, price] = await this.publicClient.readContract({
+    const [, price] = await this.read('agents', () =>
+      this.publicClient.readContract({
       address: this.escrow,
       abi: [
         {
@@ -326,7 +359,8 @@ export class EscrowOperatorService {
       ] as const,
       functionName: 'agents',
       args: [agentId],
-    });
+      }),
+    );
 
     return fromBaseUnits(price);
   }

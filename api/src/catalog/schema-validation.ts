@@ -6,6 +6,18 @@ import { InvalidJsonSchemaError } from './catalog.errors';
 /**
  * The one Ajv instance this module uses, configured once at module load.
  *
+ * ⚠️ **One instance, two callers, standing on opposite sides of a purchase.**
+ * `assertValidJsonSchema` is the *seller's* gate: it runs when an agent is
+ * listed or a new version is published, and it asks "is this document a JSON
+ * Schema this platform can execute against?". `validateAgainstSchema` is the
+ * *buyer's* gate: it runs when an order is being placed, and it asks "does this
+ * submitted input satisfy that already-stored schema?". Different questions,
+ * different failure meanings, different HTTP statuses — but deliberately the
+ * same Ajv, because everything below about the dialect, the compile cache and
+ * `$id` registration applies identically to both and is not worth writing down
+ * twice. The reasons this instance is configured the way it is are the reasons
+ * both callers need; see each function for how they diverge.
+ *
  * ⚠️ **`Ajv2020` from `ajv/dist/2020`, never the default `ajv` export.** The
  * default export is draft-07; this one is draft 2020-12, and the dialect here
  * follows the schema's *next* consumer rather than its first. API-08 hands
@@ -149,6 +161,138 @@ export function assertValidJsonSchema(
   } finally {
     // Both on success and on the throw path — see the warning above.
     ajv.removeSchema(schema);
+  }
+}
+
+/**
+ * Checks a buyer's submitted `input` against a seller's stored `inputSchema`,
+ * and reports the verdict instead of enforcing it.
+ *
+ * ⚠️ **Not the same job as `assertValidJsonSchema`, despite the shared file and
+ * the shared Ajv.** That function validates a *document as a schema* — is this
+ * thing a JSON Schema at all — and runs when a seller lists an agent or
+ * publishes a version. This one validates *data against a schema* — does this
+ * order's payload fit the contract the seller already published — and runs when
+ * a buyer purchases. The two are one keystroke apart in Ajv's API
+ * (`validateSchema` vs `compile` + call) and worlds apart in meaning: a failure
+ * of the first is the seller's mistake, a failure of the second is the buyer's,
+ * and confusing them produces a `400` blaming the wrong party. They sit
+ * together anyway because they need the same instance, not because they are
+ * variations on one idea.
+ *
+ * This completes the module's use of Ajv. `validateSchema` was the seller's
+ * half; `compile()` + calling the result is the buyer's. `compile()` appears in
+ * both, for different reasons: there it is a *check* whose return value is
+ * discarded (does the schema's `$ref` resolve), here it is the thing we
+ * actually want.
+ *
+ * ---
+ *
+ * **It returns rather than throws, unlike its neighbour.**
+ * `assertValidJsonSchema` is an assertion because every caller wants the
+ * request aborted. This one has exactly one caller — the purchase flow in
+ * `orders/` — and that caller must turn a failure into a `400` naming the
+ * request field the input arrived on, which is a decision only it can make:
+ * `input` is *its* body property, not the catalogue's, and the catalogue has no
+ * business inventing a field name for a DTO it never sees. Handing back a
+ * discriminated result keeps that ownership where it belongs, and lets the
+ * caller decide the failure is worth a metric or a log line before it turns it
+ * into a status code. (FR-003)
+ *
+ * `dataVar: 'input'` makes Ajv's message read `input/quantity must be integer`
+ * rather than `data/quantity must be integer`, and the pointer is the entire
+ * value of returning Ajv's own text unedited: it tells a buyer *where* in a
+ * nested payload the mismatch is. A rewritten "invalid input" would be a
+ * shorter sentence that costs the buyer the debugging session. (Same reasoning
+ * as `InvalidJsonSchemaError`'s `detail`.)
+ *
+ * ---
+ *
+ * ⚠️ **Why this lives in `catalog/` and shares the instance, rather than in
+ * `orders/` with an Ajv of its own.** The docblock on `ajv` above reasons
+ * carefully about three things that are each easy to get subtly wrong and
+ * silently: the 2020-12 dialect (a draft-07 instance would *accept* the same
+ * schemas while quietly ignoring `prefixItems` and friends, so a buyer's
+ * malformed input would sail past validation and fail later, mid-order, on a
+ * paid escrow), `strict: false`, and the `removeSchema` discipline below. A
+ * second instance in `orders/` would be a second copy of that reasoning, kept
+ * in sync by nobody, and its divergence would show up as *accepted bad orders*
+ * rather than as a crash.
+ *
+ * The cross-module import that buys this is a pure function, not a provider —
+ * `orders/` imports a function, not `CatalogModule`, and takes on no DI edge,
+ * no circular-module risk and nothing to mock. That is a cheap enough coupling
+ * to prefer over a duplicated Ajv.
+ *
+ * ---
+ *
+ * ⚠️ **A `compile()` throw here means a stored schema, not a submitted one.**
+ * The schema arrives from the `agent_versions` row, and it only got there by
+ * passing all three of `assertValidJsonSchema`'s checks — including `compile()`
+ * — at listing time. So a throw at *this* point is not "the seller sent
+ * rubbish"; it is a schema that compiled once and does not any more: an Ajv
+ * upgrade that tightened a keyword, a hand-edited row, a restore from a dump.
+ * It is a real defect and it is nobody's fault in this request.
+ *
+ * It is still returned as `{ valid: false }` rather than allowed to escape,
+ * because the alternative is a `500` on a purchase. A `500` tells the buyer to
+ * retry, and the retry will fail identically forever, while the seller — the
+ * only person who can fix it, by republishing the version — never learns. A
+ * `400` carrying Ajv's compile message is the honest answer to "can this order
+ * be placed": no, and here is the reason. The message is prefixed so nobody
+ * reading a support ticket mistakes an unusable stored schema for a buyer's
+ * typo, since those two need opposite remedies.
+ *
+ * The `catch` also covers a throw from `validate()` itself (an `$async` schema
+ * that slipped through returns a promise rather than a boolean, and a rejected
+ * one would surface here). Same argument: on a purchase path, no schema problem
+ * of any shape should become a `500`.
+ *
+ * ⚠️ **`removeSchema` in a `finally`, for the reasons spelled out under
+ * `assertValidJsonSchema` — and they bite harder here.** Every request loads
+ * this schema fresh from Postgres, so it is a new object each time and never a
+ * cache hit; without the removal the instance accumulates one compiled entry
+ * per order placed, forever. Worse, the `$id` registration is per-instance and
+ * this instance is shared: two sellers who both started from the same
+ * copy-pasted example share an `$id`, and the second agent purchased would fail
+ * to compile with `schema with key or id "…" already exists` — a buyer refused
+ * because of an unrelated seller's document. The object form of the call, never
+ * the no-argument form, which would drop the compiled meta-schemas too.
+ */
+export function validateAgainstSchema(
+  schema: Record<string, unknown>,
+  data: unknown,
+): { valid: true } | { valid: false; errors: string } {
+  // The cast is the same one `assertValidJsonSchema` makes: Ajv's `SchemaObject`
+  // declares `$id?: string`, which an index signature of `unknown` does not
+  // satisfy. Sound in practice because this document already passed that
+  // function's three checks before it was stored.
+  const schemaObject = schema as AnySchemaObject;
+
+  try {
+    const validate = ajv.compile(schemaObject);
+
+    if (validate(data)) {
+      return { valid: true };
+    }
+
+    return {
+      valid: false,
+      errors: ajv.errorsText(validate.errors, { dataVar: 'input' }),
+    };
+  } catch (err) {
+    // Not a buyer error — see the warning above. Prefixed so it cannot be read
+    // as one.
+    return {
+      valid: false,
+      errors: `the agent's stored input schema could not be compiled: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    };
+  } finally {
+    // On the throw path too: a schema left half-registered under its `$id` is
+    // exactly how the duplicate-`$id` failure starts firing on retries.
+    ajv.removeSchema(schemaObject);
   }
 }
 

@@ -202,7 +202,99 @@ export class LedgerRepository {
     amountMinor: number,
     externalRef?: string | null,
   ): Promise<LedgerEntry> {
-    return this.dataSource.transaction(async (manager) => {
+    return this.dataSource.transaction(async (manager) =>
+      this.debitLocked(manager, {
+        accountId,
+        amountMinor,
+        kind: LedgerKind.Offramp,
+        orderId: null,
+        externalRef: externalRef ?? null,
+      }),
+    );
+  }
+
+  /**
+   * The same guarantee as `debitWithBalanceCheck`, enlisted in a transaction the
+   * caller already owns.
+   *
+   * ## Why this exists as a second entry point rather than a parameter
+   *
+   * The purchase saga has to write **two** rows that must stand or fall
+   * together: the `orders` row and the `purchase` debit that pays for it. Any
+   * gap between them is a window in which the same balance is spent twice
+   * (`specs/007-orders-purchase-saga` FR-007), so both inserts and the
+   * affordability check that guards them have to sit inside one transaction —
+   * the caller's, because the order insert is the caller's.
+   *
+   * `debitWithBalanceCheck` cannot serve that: it opens a transaction of its
+   * own, so its lock would be released at its own commit, before the order row
+   * was written. Two public methods over one private core is the honest shape —
+   * one for callers that have no transaction, one for callers that do.
+   *
+   * ⚠️ **The caller must insert the order row BEFORE calling this.**
+   * `ledger_entries.order_id` carries `REFERENCES orders(id)`, so a debit
+   * written first fails the foreign key. The natural reading of "take the money,
+   * then record what it bought" does not compile, and this is the only place
+   * that says so.
+   *
+   * ⚠️ `amountMinor` is **positive** — the amount being taken out, in the
+   * caller's language — and the row written is its negation, exactly as
+   * `debitWithBalanceCheck` does. The negation happens in `debitLocked` so there
+   * is one place a sign error is possible, and it is the place that just
+   * finished comparing the magnitude against the balance.
+   *
+   * `kind` is the caller's, because this method serves more than one flow:
+   * `purchase` for the saga, `offramp` for a cash-out. It is **not** a general
+   * back door — `appendEntry` is the unchecked insert, and anything that needs
+   * to write without a balance check should use that and say why.
+   *
+   * @throws {InsufficientBalanceError} — thrown inside the caller's transaction,
+   * so their rollback is total and their lock is released with it.
+   */
+  async debitWithinTransaction(
+    manager: EntityManager,
+    input: {
+      accountId: string;
+      /** POSITIVE whole USD cents — the amount to take out. Negated on write. */
+      amountMinor: number;
+      kind: LedgerKind;
+      orderId?: string | null;
+      externalRef?: string | null;
+    },
+  ): Promise<LedgerEntry> {
+    return this.debitLocked(manager, {
+      accountId: input.accountId,
+      amountMinor: input.amountMinor,
+      kind: input.kind,
+      orderId: input.orderId ?? null,
+      externalRef: input.externalRef ?? null,
+    });
+  }
+
+  /**
+   * Lock, sum, refuse, insert — the four steps, inside whatever transaction the
+   * `manager` belongs to.
+   *
+   * ⚠️ **This method is meaningless outside a transaction.** Given a manager
+   * from the default connection the `FOR UPDATE` acquires and releases
+   * immediately, the sum is read outside any serialisation, and the insert
+   * commits on its own — the race is back, with the lock statement still in the
+   * code looking as though it prevented it. Both public callers above open or
+   * receive a real transaction; nothing else may call this.
+   */
+  private async debitLocked(
+    manager: EntityManager,
+    input: {
+      accountId: string;
+      amountMinor: number;
+      kind: LedgerKind;
+      orderId: string | null;
+      externalRef: string | null;
+    },
+  ): Promise<LedgerEntry> {
+    const { accountId, amountMinor } = input;
+
+    {
       // ─── 1. Serialise on the account row ────────────────────────────────
       // `SELECT id FROM accounts WHERE id = $1 FOR UPDATE`. The selected
       // column is irrelevant and the result is discarded — the lock is the
@@ -259,12 +351,12 @@ export class LedgerRepository {
         {
           accountId,
           amountMinor: -amountMinor,
-          kind: LedgerKind.Offramp,
-          orderId: null,
-          externalRef: externalRef ?? null,
+          kind: input.kind,
+          orderId: input.orderId,
+          externalRef: input.externalRef,
         },
         manager,
       );
-    });
+    }
   }
 }

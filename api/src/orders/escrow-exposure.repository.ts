@@ -36,7 +36,7 @@ export class EscrowExposureRepository {
    * is the amount that actually entered escrow — a seller who edits their
    * listing afterwards cannot move this figure.
    *
-   * ⚠️ **Filter by STATE only. Never add `AND onchain_deal_id IS NOT NULL`.**
+   * ⚠️ **Never add `AND onchain_deal_id IS NOT NULL`.**
    * It reads like a safety check and it is a money-losing bug. An order can
    * legitimately exist with a `purchase` ledger debit already written and a
    * null deal id — that is precisely what invariant #1's Postgres-first
@@ -46,6 +46,44 @@ export class EscrowExposureRepository {
    * honest place to show them. Filtering on a confirmed deal id would make that
    * money disappear from BOTH figures for the width of the saga — the user
    * watches their balance drop and nothing rise. (research R3)
+   *
+   * API-07 made that row shape not merely possible but a **resting state**: an
+   * `openDeal` whose receipt never arrived leaves the order in `purchased` with
+   * a null deal id and no compensation, because the transaction may still
+   * confirm (`specs/007-orders-purchase-saga/research.md` R3). The warning above
+   * is therefore stronger now than when it was written.
+   *
+   * ---
+   *
+   * ## ⚠️ The one exclusion, and why it is NOT the predicate above
+   *
+   * `state = 'failed'` covers two situations that share a word and nothing else,
+   * and `onchain_deal_id` is the only thing that separates them:
+   *
+   * | | deal id | Tokens escrowed | Ledger |
+   * | --- | --- | --- | --- |
+   * | The agent ran and produced nothing | **set** | ✅ yes, until the reclaimer sweeps | debit only |
+   * | `openDeal` was refused (API-07) | **NULL** | ❌ no — nothing was ever locked | debit **+ compensating credit** |
+   *
+   * The second must not be counted. Its compensating `adjustment` has already
+   * put the money back into `availableBalanceMinor`, so counting it here would
+   * show the buyer the same cents in two figures at once. Hence
+   * `NOT (state = 'failed' AND onchain_deal_id IS NULL)`.
+   *
+   * **That is a narrower predicate than the forbidden one and disagrees with it
+   * on the row that matters:**
+   *
+   * | Row | `AND onchain_deal_id IS NOT NULL` (forbidden) | This exclusion |
+   * | --- | --- | --- |
+   * | `purchased`, NULL — mid-saga or unconfirmed | ❌ dropped, and the money vanishes | ✅ **kept** |
+   * | `failed`, NULL — compensated | ✅ dropped | ✅ dropped |
+   * | `failed`, set — produced nothing | ✅ kept | ✅ kept |
+   *
+   * The forbidden predicate is about *confirmation*; this one is about
+   * *compensation*. They coincide on one row and differ on the one the warning
+   * exists to protect. `OrderRepository.markFailed` is the only writer of
+   * `failed` + NULL, which is what makes this exact rather than approximate.
+   * (`specs/007-orders-purchase-saga/research.md` R14)
    *
    * Uses the existing `orders_buyer_idx ON (buyer_account_id, created_at)` for
    * the buyer predicate; the state filter is applied on top of it.
@@ -61,6 +99,10 @@ export class EscrowExposureRepository {
         // here can mutate the shared constant.
         states: [...ESCROWED_ORDER_STATES],
       })
+      // ⚠️ The compensated-purchase exclusion. See the docblock — this is NOT
+      // `AND onchain_deal_id IS NOT NULL`, and the difference is the mid-saga
+      // row, which must keep counting.
+      .andWhere("NOT (o.state = 'failed' AND o.onchain_deal_id IS NULL)")
       .getRawOne<{ total: string }>();
 
     // SUM(bigint) comes back as `numeric`, which the driver hands over as a

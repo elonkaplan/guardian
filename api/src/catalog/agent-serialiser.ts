@@ -63,15 +63,30 @@ import type {
  * `dto/agent-version-detail.dto.ts`, and `agent-versions.service.ts` which maps
  * it for its owner. None of those is on a buyer's path.
  *
- * ## For API-09
+ * ## The wider boundary — built by API-07, in `orders/`
  *
  * Execution steps are shown to buyers, and a reasoning step can paraphrase the
  * prompt it was given without ever touching this column — so the boundary is
- * wider than one field, and the redaction for run steps belongs **in this
- * module**, extending it. Building a second boundary elsewhere is how a
- * codebase ends up with two rules and one of them out of date.
+ * wider than one field. This comment used to say that redaction belonged "in
+ * this module" and to attribute it to API-09; both were slightly wrong.
+ * `GET /orders/:id/case-file` is the route that shows steps, it is **API-07's**,
+ * and its mapper is `src/orders/order-serialiser.ts`.
  *
- * (`specs/006-agent-catalogue/research.md` R9)
+ * That is a sibling of this file rather than an addition to it, for the reason
+ * `agent-versions.service.ts` is a sibling too: the case file has a *seller's*
+ * copy that must carry `systemPrompt`, and a mapper that needs the field cannot
+ * live behind a boundary defined by not having it. What carries across is the
+ * construction, not the code — `Pick<>` parameter types with no such member,
+ * closed return interfaces, and queries that never name the column.
+ *
+ * ⚠️ **The step redaction drops model prose; it does not shorten it.** The first
+ * sentence of a paraphrase is still a paraphrase and the leak is at the start,
+ * so the buyer's `summary` is composed by the platform from a step's structure
+ * (`ui/docs`'s `ui-design.md` §7.1, `specs/007-orders-purchase-saga/research.md`
+ * R11). Truncating would look like compliance and would not be.
+ *
+ * (`specs/006-agent-catalogue/research.md` R9;
+ *  `specs/007-orders-purchase-saga/research.md` R10, R11)
  */
 
 /**
