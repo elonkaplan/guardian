@@ -169,6 +169,40 @@ declare every index, `CHECK`, unique, and foreign-key constraint *name* explicit
 this check stays trustworthy, and the first run before that was in place proposed
 dropping all four CHECKs and all five named indexes.
 
+## The published contract
+
+Every route this service serves is described in
+[`docs/openapi.yaml`](docs/openapi.yaml) — OpenAPI 3.1, hand-written from responses
+captured off the running API rather than generated from decorators. It is browsable
+at **`GET /docs`**, which needs no credentials:
+
+```bash
+open http://localhost:3000/docs        # Swagger UI
+curl -s localhost:3000/docs-yaml       # the document itself, over HTTP
+```
+
+**Read [`docs/openapi-divergences.md`](docs/openapi-divergences.md) before building
+against it.** The contract describes what the code *does*, which is not the same
+question as whether the code is *right* — every place the two documents disagree with
+the product design is recorded there with a verdict. One row is marked
+`DO NOT ADOPT`: the buyer's case-file `steps` is always empty where the design says it
+carries a summarised trace.
+
+Three things to know if you edit the contract:
+
+- It is read from disk at boot, so a change needs `docker compose restart api` — the
+  file is bind-mounted, so it does **not** need a rebuild.
+- `.dockerignore` excludes `docs/` and carries a `!docs/openapi.yaml` negation. Remove
+  that line and `/docs` keeps working on your host and 404s in the container.
+- A malformed document does not stop the API booting: the loader logs an error and
+  skips mounting Swagger. If `/docs` is missing, check the startup log.
+
+Regenerate the captures the contract is written from with:
+
+```bash
+node scripts/verify-012.mjs ./captures
+```
+
 ## Auth
 
 A wallet signature in, a session token out. **Connecting a wallet is the entire

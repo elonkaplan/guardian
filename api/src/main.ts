@@ -4,8 +4,11 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 
+import { SwaggerModule } from '@nestjs/swagger';
+
 import { AppModule } from './app.module';
 import { type AppConfig } from './config/env.schema';
+import { loadOpenApiDocument } from './docs/openapi-document';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -31,6 +34,26 @@ async function bootstrap(): Promise<void> {
     origin: ['https://guardian.clone.solutions', 'http://localhost:5173'],
     credentials: true,
   });
+
+  // The published contract at `GET /docs`, from a hand-written document rather
+  // than from decorators — see src/docs/openapi-document.ts for why.
+  //
+  // ⚠️ **`SwaggerModule.setup` registers on the HTTP adapter, not the Nest
+  // router**, so the global fail-closed JWT guard never sees these paths and
+  // there is nowhere to put a `@Public()`. That is what makes them anonymous,
+  // and it is verified by curling without a token rather than assumed — a
+  // contract behind a login is a 401 on a judge's screen.
+  //
+  // A null document means the file was missing or malformed; that is logged in
+  // the loader and skipped here, because documentation must not be able to take
+  // the API down.
+  const openApiDocument = loadOpenApiDocument();
+
+  if (openApiDocument !== null) {
+    SwaggerModule.setup('docs', app, openApiDocument as never);
+  } else {
+    new Logger('Bootstrap').warn('GET /docs is not being served — see the OpenAPI error above.');
+  }
 
   await app.listen(port);
 

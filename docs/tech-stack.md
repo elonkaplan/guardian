@@ -69,7 +69,10 @@ NestJS + TypeORM + Zod idiom directly.
 
 ```ts
 const Verdict = z.object({
-  tier: z.enum(["0", "25", "50", "75", "100"]),
+  // The member names of the `verdict_tier` DDL enum (database-schema §8) — not the
+  // percentages. The two documents disagreed here until API-12's contract diff; the
+  // DDL is what the column stores and what the API emits.
+  tier: z.enum(["none", "quarter", "half", "three_quarter", "full"]),
   reasoning: z.string(),
   citations: z.array(z.object({
     source: z.enum(["capability", "exclusion", "criterion"]),

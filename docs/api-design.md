@@ -93,8 +93,14 @@ just in the doc.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/auth/nonce` | `{ address }` → `{ nonce }` |
+| `POST` | `/auth/nonce` | `{ address }` → `{ nonce, message }` |
 | `POST` | `/auth/verify` | `{ address, signature }` → `{ token }`. Creates the account on first sign-in. |
+| `GET` | `/auth/session` | `{ accountId, address }` — who the current token belongs to |
+
+**`/auth/nonce` returns the message, not just the nonce.** The wallet signs a
+specific string, and the client cannot reconstruct it from the nonce alone without
+duplicating the server's formatting — at which point a change on one side silently
+breaks recovery on the other. Sign `message` verbatim.
 
 ### 3.2 Accounts & money
 
@@ -212,6 +218,22 @@ hand at 3am is how demos get broken.
 
 **No Rain webhook endpoint** — there is no live Rain integration to receive events
 from (rain §0).
+
+### 3.6 Health
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/health` | Public. Liveness plus a database ping; `503` with the same body shape when an indicator is down. |
+
+Unauthenticated on purpose — a health check behind the fail-closed guard reports
+that the guard works, not that the service does.
+
+### 3.7 The published contract
+
+`docs/openapi.yaml` in `api/` describes every route above as the code actually
+serves it, and is browsable at `GET /docs`. Where it and this document disagree, the
+difference is recorded with a verdict in `api/docs/openapi-divergences.md` — read
+that before treating either one as authoritative.
 
 ---
 

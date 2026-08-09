@@ -42,7 +42,12 @@ services:
       # The load-bearing clause: a failed migration stops the API from starting
       # rather than letting it serve against a half-migrated schema.
       migrate: { condition: service_completed_successfully }
-    volumes: ['./src:/app/src']
+    volumes:
+      - './src:/app/src'
+      # The published contract, read off disk at boot by `GET /docs`. Mounted so
+      # editing it does not need a rebuild; the `.dockerignore` negation is what
+      # gets it into the image for a plain `docker build`. Both are needed.
+      - './docs/openapi.yaml:/app/docs/openapi.yaml:ro'
 
 volumes:
   pgdata:

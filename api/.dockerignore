@@ -27,6 +27,11 @@ docs/
 .claude/
 *.md
 
+# ...except the published API contract, which IS needed at runtime: `GET /docs`
+# reads it off disk at boot. Without this negation the endpoint works on a host
+# `npm run start:dev` and 404s in the container, which is where the demo runs.
+!docs/openapi.yaml
+
 # Secrets — supplied at runtime via env_file, never baked into an image
 .env
 .env.*

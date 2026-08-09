@@ -1,0 +1,3272 @@
+openapi: 3.1.0
+info:
+  title: Guardian API
+  version: 0.1.0
+  summary: Escrow marketplace for AI agents, with LLM dispute arbitration.
+  description: |
+    **This document describes what the API does, not what it was designed to do.**
+
+    Every response shape here was captured from the running service and transcribed
+    field for field. Where an internal type declaration and the wire disagreed, the
+    wire won.
+
+    That distinction matters, because "the code does X" and "X is correct" are
+    different questions and collapsing them is how a bug becomes a contract. The
+    differences between this document and the product's design documents are
+    recorded, with a verdict on each, in **`openapi-divergences.md`** alongside this
+    file. Read it before building against anything here that surprises you: rows
+    marked `DO NOT ADOPT` are known defects that were documented rather than fixed.
+
+    ## Four things worth knowing before you read the rest
+
+    - **All money is US cents**, in fields whose names end `Minor`. There are no
+      fractional units and no currency field; token base units exist only inside
+      the chain adapter and never reach this API.
+    - **Null is a value, not an absence.** `settledFundsMinor` is always sent and is
+      `null` when the on-chain read failed — meaning *unknown*, never zero. A run's
+      `output` is `null` when the agent produced nothing, and that null is the
+      evidence a dispute turns on. Neither should be normalised away by a client.
+    - **404 and 403 are final; every other failure is retryable.** A caller who is
+      neither the buyer nor the selling agent's owner receives `404`, never `403` —
+      the API will not confirm that an id exists.
+    - **Error bodies are not uniform.** Most are `{statusCode, message, error}`, but
+      request-body validation omits `statusCode`, and the verdict route returns a
+      bare `{error: "CODE"}`. Each operation below documents the shape it actually
+      returns.
+
+    ## Authentication
+
+    Sign a nonce with a wallet key, exchange the signature for a JWT, and send it as
+    `Authorization: Bearer <token>`. The guard is global and refuses by default, so
+    an operation is protected unless it is marked otherwise below.
+servers:
+  - url: http://localhost:3000
+    description: Local development, via docker compose
+  - url: https://api.guardian.clone.solutions
+    description: Deployed instance
+tags:
+  - name: Auth
+    description: Wallet sign-in. The nonce is signed by the wallet; the signature is exchanged for a JWT.
+  - name: Accounts
+    description: Who you are, what you hold, and how it got there.
+  - name: Funding
+    description: Money in and out of the platform balance. The funder wallet is the outside world.
+  - name: Rain
+    description: |
+      Stubbed payment-route lookups. They log the request Rain would have received and
+      make no call — never a fake success. Authenticated despite being stubs.
+  - name: Catalogue
+    description: Agents and their immutable versions. An order is judged against the version that ran.
+  - name: Orders
+    description: Purchase, delivery, acceptance, dispute, and the evidence behind a ruling.
+  - name: Sales
+    description: The same orders seen by the seller whose agent ran them.
+  - name: Demo
+    description: |
+      Seeds the three demo agents and clears transactional history between rehearsals.
+      Unauthenticated by recorded decision — safe to call twice, and neither response
+      discloses a seller's system prompt.
+  - name: Health
+    description: Liveness, including a database ping.
+
+paths:
+  /demo/seed:
+    post:
+      tags: [Demo]
+      operationId: demoSeed
+      summary: Publish the three demo agents and register their fixtures
+      description: |
+        Creates the demo seller's three agents — a receipt extractor, a summariser and a
+        translator — registers each on-chain, and returns the three act fixtures.
+
+        **Idempotent.** A second call creates nothing, registers nothing on-chain, and
+        returns the existing ids with `created: false`.
+
+        **Unauthenticated by recorded decision.** The mitigation is that it is safe to
+        call twice and that its response carries no system prompts.
+      security: []
+      responses:
+        '200':
+          description: The seeded catalogue and the three fixtures.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeedResponse'
+
+  /demo/reset:
+    post:
+      tags: [Demo]
+      operationId: demoReset
+      summary: Clear transactional history so the acts can be run again
+      description: |
+        Removes every order, run, complaint and ruling. **Keeps** accounts, the agents
+        and their on-chain registrations, and every ledger entry.
+
+        It does not restore spent balance: the ledger is append-only, and money already
+        escrowed or settled is on-chain under its recipient's own address. A long
+        rehearsal session tops up through the ordinary funding path instead.
+
+        Safe to call repeatedly, and succeeds when there is nothing to clear.
+      security: []
+      responses:
+        '200':
+          description: Counts of what was cleared and what was kept.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetResponse'
+
+  /health:
+    get:
+      tags: [Health]
+      operationId: health
+      summary: Liveness, including a database ping
+      description: Returns 503 with the same shape when an indicator is down.
+      security: []
+      responses:
+        '200':
+          description: Everything is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+        '503':
+          description: An indicator is down — the failing one appears under `error`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+
+  /auth/nonce:
+    post:
+      tags: [Auth]
+      summary: Request a sign-in challenge
+      operationId: issueNonce
+      description: >-
+        Step 1 of 2 of sign-in. Returns a single-use nonce and the exact message
+        to sign. Public — you cannot present a credential you do not have yet.
+
+        Issuing a second challenge for the same address invalidates the first,
+        so at most one is outstanding per address at any time. The challenge
+        expires after five minutes or one use, whichever comes first.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NonceRequest'
+      responses:
+        '201':
+          description: >-
+            Challenge issued. Note the `201` — this is Nest's default for a
+            `POST` and it is what the route really answers, despite nothing
+            addressable being created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NonceResponse'
+        '400':
+          description: Malformed address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+
+  /auth/verify:
+    post:
+      tags: [Auth]
+      summary: Exchange a signature for a session token
+      operationId: verifySignature
+      description: >-
+        Step 2 of 2 of sign-in. Verifies the signature over the message from
+        `POST /auth/nonce`, consuming the challenge, and returns a bearer token.
+        Creates the account on a first successful sign-in. Public.
+
+        The challenge is single-use: a failed attempt cannot be retried with the
+        same signature, so a client that gets a `401` must request a fresh
+        nonce and sign that one.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+      responses:
+        '201':
+          description: >-
+            Signed in. `201` is what the route really answers (Nest's default
+            for a `POST`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyResponse'
+        '400':
+          description: Malformed address or signature (shape check only).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: >-
+            `Signature verification failed`. Four distinct causes collapse to
+            this one identical response — no challenge outstanding, challenge
+            expired, signature undecodable, and signature recovered to a
+            different address. The distinction is deliberately withheld: since
+            accounts are wallet addresses, differing messages would answer "does
+            this wallet hold an account here?" for any address a script cares to
+            try. The server log records which of the four it was.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/session:
+    get:
+      tags: [Auth]
+      summary: Identify the holder of the current token
+      operationId: getSession
+      description: >-
+        Confirms a stored token is still valid and says whose it is. Cheap by
+        design — no balance sum and no chain read, unlike `GET /me`. Use it on
+        app load; use `GET /me` for money.
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: The token is valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '401':
+          description: >-
+            `Authentication required` when the header is missing, the token is
+            unverifiable, or the account it names no longer exists;
+            `Session expired` when the token is well-formed but past its `exp`.
+            Only the expiry case is distinguished, so a UI can silently prompt a
+            re-sign. There is no refresh — recover by running the nonce/verify
+            flow again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /me:
+    get:
+      tags: [Accounts]
+      summary: Account summary and the three money figures
+      operationId: getMe
+      description: >-
+        The endpoint the balance widget polls (every 5 s in the reference UI).
+        Takes no parameters of any kind — the account is the session's, never
+        the caller's to name.
+
+        It answers `200` even when the chain is unreachable, with
+        `settledFundsMinor: null`; only a Postgres failure can fail it.
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Current balances. `settledFundsMinor` may be `null` — see the schema.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSummaryResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /me/ledger:
+    get:
+      tags: [Accounts]
+      summary: Full account statement, newest first
+      operationId: getLedger
+      description: >-
+        Every ledger movement for the session's account, newest first.
+        Unpaginated and unfiltered. An account with no movements gets `[]`,
+        never a `404`.
+
+        The sum of `amountMinor` over this array equals `availableBalanceMinor`
+        from `GET /me`. Withdrawals deliberately never appear here: settled
+        funds land on-chain under the user's own address and write no ledger
+        row.
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: The statement. Possibly empty.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LedgerEntryResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /topup:
+    post:
+      tags: [Funding]
+      summary: Add funds to the platform balance
+      operationId: topUp
+      description: >-
+        Moves test USDC from the funder wallet into the operator pool, then
+        credits the session's account with an `onramp` ledger entry. The
+        transfer happens first, so a chain failure leaves no phantom credit.
+
+        Answers with the updated account summary so the balance widget needs no
+        second round trip.
+
+        ⚠️ Answers `200`, not `201` — nothing addressable is created, and the
+        route sets the status explicitly.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmountRequest'
+      responses:
+        '200':
+          description: Funds credited. The updated summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSummaryResponse'
+        '400':
+          description: '`amountMinor` missing, zero, negative, fractional, or beyond the safe-integer bound.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            State conflict, not a malformed request — worth retrying once
+            something changes. Here: `Funder wallet holds $X, cannot transfer
+            $Y`, i.e. the platform's own funder wallet is short and only an
+            operator refill fixes it. Message amounts are formatted dollars, safe
+            to show verbatim.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >-
+            The chain call failed (node unreachable, revert, gas exhausted,
+            allowance). If the outcome is genuinely unknown the body carries an
+            extra `txHash` alongside `message` — that hash is the only way to
+            find out what actually happened, so surface it rather than
+            swallowing it.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/ChainOutcomeUnknownResponse'
+                description: |
+                  Two shapes. An ordinary chain failure returns `ErrorResponse`. A
+                  transaction that was broadcast but whose outcome is unknown returns
+                  `ChainOutcomeUnknownResponse` — `{message, txHash}`, with no
+                  `statusCode` — and must not be treated as a failure until the hash
+                  is checked.
+
+  /withdraw:
+    post:
+      tags: [Funding]
+      summary: Withdraw settled escrow funds to the user's own wallet
+      operationId: withdraw
+      description: >-
+        Calls `withdrawFor` on the escrow contract, paying the account's settled
+        balance out to `address` from the session.
+
+        ⚠️ **No request body and no partial withdrawal.** The contract pays out
+        the entire settled balance; there is no amount parameter on the chain
+        call, so accepting one over HTTP would mean echoing back a number the
+        API then ignores. The destination is not in the request either — a
+        caller-supplied address would let anyone redirect anyone else's payout.
+
+        Writes no ledger entry, so the statement is unchanged and this is the
+        one funding route that does not answer with an account summary. Refetch
+        `GET /me` for the new `settledFundsMinor`.
+
+        ⚠️ Answers `200`, not `201`.
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: >-
+            Payout confirmed on chain. Returns the transaction hash, the cents
+            moved, and an explorer link.
+          x-captured: 'documented from source; a live 200 was not captured (no settled funds existed)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            `No settled funds to withdraw` — a fixed sentence, since the one
+            figure involved is zero. Nothing was submitted to the chain, which
+            matters on Monad because the gas limit is charged even for a no-op.
+            Gate the Withdraw button on `settledFundsMinor > 0` to avoid it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >-
+            The `withdrawFor` call failed. On an unknown outcome the body
+            carries an extra `txHash` alongside `message`.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/ChainOutcomeUnknownResponse'
+                description: |
+                  Two shapes. An ordinary chain failure returns `ErrorResponse`. A
+                  transaction that was broadcast but whose outcome is unknown returns
+                  `ChainOutcomeUnknownResponse` — `{message, txHash}`, with no
+                  `statusCode` — and must not be treated as a failure until the hash
+                  is checked.
+
+  /offramp:
+    post:
+      tags: [Funding]
+      summary: Cash out platform balance back to the funder wallet
+      operationId: offramp
+      description: >-
+        Debits the account's ledger and sends the matching USDC from the
+        operator pool out to the funder wallet — the reverse of `/topup`. The
+        debit happens first, inside a row-locked transaction, so a chain failure
+        cannot leave the ledger over-drawn.
+
+        Partial cash-out is supported; the ceiling is `availableBalanceMinor`.
+        Escrowed money cannot leave through here — it is structurally excluded,
+        since escrow is not part of that sum.
+
+        ⚠️ Answers `200`, not `201`.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmountRequest'
+      responses:
+        '200':
+          description: Cashed out. The updated summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountSummaryResponse'
+        '400':
+          description: '`amountMinor` missing, zero, negative, fractional, or beyond the safe-integer bound.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            State conflict on a well-formed request. Two wordings:
+            `Available balance is $X, cannot cash out $Y` (the caller is short —
+            check against `availableBalanceMinor` first) and
+            `Operator pool holds $X, cannot cash out $Y` (the platform is short).
+            Captured example: `Operator pool holds $45.00, cannot cash out
+            $999999.99`. Amounts are formatted dollars and are safe to show
+            verbatim.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >-
+            The chain transfer failed. On an unknown outcome the body carries an
+            extra `txHash` alongside `message`.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/ChainOutcomeUnknownResponse'
+                description: |
+                  Two shapes. An ordinary chain failure returns `ErrorResponse`. A
+                  transaction that was broadcast but whose outcome is unknown returns
+                  `ChainOutcomeUnknownResponse` — `{message, txHash}`, with no
+                  `statusCode` — and must not be treated as a failure until the hash
+                  is checked.
+
+  /onramp/routes:
+    post:
+      tags: [Rain]
+      summary: 'Fiat → USDC payment route (stub: logs the call, never sends it)'
+      operationId: createOnrampRoute
+      description: >-
+        Builds and logs the exact Rain `POST /payment-routes` request for a
+        fiat-in route, then returns without calling Rain. Monad is not a
+        supported Rain payment-route rail, so the call cannot complete; real
+        funding goes through `POST /topup` instead.
+
+        ⚠️ **Authenticated, despite doing nothing.** It reads deployment
+        configuration and names the operator address in its response, so it is
+        not anonymous-public. `@Public()` is reserved for the two auth routes
+        that cannot present a credential.
+
+        ⚠️ Answers `200` with an honest body (`stub: true`,
+        `rainCallMade: false`) rather than an error status: the route did
+        exactly what it was built to do, and a `5xx` would push callers into
+        retry-and-alert over a working endpoint. Do not read the `200` as the
+        integration working. No `depositAddress` on this direction.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmountRequest'
+      responses:
+        '200':
+          description: >-
+            The stub response. `depositAddress` is absent on this route — money
+            would arrive from a bank, so there is nothing to deposit to.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RainStubResponse'
+        '400':
+          description: >-
+            `amountMinor` missing, zero, negative, fractional, or beyond the
+            safe-integer bound. Validated even though the value only reaches a
+            log — the log IS the deliverable, and a payload built from `12.34`
+            is not a request Rain would ever receive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /offramp/routes:
+    post:
+      tags: [Rain]
+      summary: 'USDC → fiat payment route (stub: logs the call, never sends it)'
+      operationId: createOfframpRoute
+      description: >-
+        The mirror of `POST /onramp/routes`: builds and logs the Rain
+        `POST /payment-routes` request for a fiat-out route and returns without
+        calling anything. Going the other way does not escape the rail problem —
+        `source.rail` is still `monad`. Real cash-out goes through
+        `POST /offramp`.
+
+        ⚠️ **Authenticated**, for the same reason as the onramp stub. Answers
+        `200` with `stub: true` / `rainCallMade: false`.
+
+        Unlike the onramp, the response carries `depositAddress` — the funder
+        wallet, standing in for what Rain would have returned.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmountRequest'
+      responses:
+        '200':
+          description: The stub response, including `depositAddress`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RainStubResponse'
+        '400':
+          description: >-
+            `amountMinor` missing, zero, negative, fractional, or beyond the
+            safe-integer bound.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents:
+    get:
+      tags: [Catalogue]
+      summary: Browse the public catalogue, or list your own agents
+      operationId: listAgents
+      description: |
+        One route with three documented behaviours, selected by the `owner` query
+        parameter and whether a bearer token is present.
+
+        | Request | Result |
+        | --- | --- |
+        | no token, no `owner` | `200` — array of `AgentSummaryResponse`: the public catalogue |
+        | `?owner=me` + token | `200` — array of `OwnedAgentResponse`: the caller's own agents |
+        | `?owner=me`, no token | `401` |
+        | `owner` set to anything but `me` | `400` |
+
+        A token may also be sent with no `owner`; it does not change the response —
+        the public catalogue is the public catalogue.
+
+        **The two arrays are different shapes, not the same shape filtered.** The
+        public list contains only agents that are `active` **and** whose on-chain
+        registration succeeded; agents whose registration failed are excluded, so a
+        seller can never find them here. The owner list includes inactive and
+        unregistered agents and adds the `active` and `listed` flags. That inclusion
+        is what makes the availability toggle two-way: an agent hidden from its
+        owner's own list could never be switched back on.
+
+        **Auth is optional** (`security: [{}, {bearerAuth: []}]`). A request with no
+        credential is allowed through; a request with an *invalid or expired* token
+        is refused with `401` rather than silently treated as anonymous — otherwise
+        a lapsed session would render as "you have no agents".
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - name: owner
+          in: query
+          required: false
+          description: |
+            Omit for the public catalogue. The only accepted value is `me`, which
+            switches the response to the caller's own agents and makes
+            authentication mandatory. Any other value is a `400` — it is never
+            silently ignored, because a filter that quietly returned the whole
+            marketplace would look like it was working.
+          schema:
+            type: string
+            enum: [me]
+      responses:
+        '200':
+          description: |
+            The catalogue, or the caller's own agents. Which of the two array shapes
+            you get is determined entirely by the `owner` parameter: absent yields
+            `AgentSummaryResponse[]`, `owner=me` yields `OwnedAgentResponse[]`. A
+            client that knows which request it sent knows which shape it has.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: array
+                    description: Public catalogue — returned when `owner` is omitted.
+                    items:
+                      $ref: '#/components/schemas/AgentSummaryResponse'
+                  - type: array
+                    description: The caller's own agents — returned for `owner=me`.
+                    items:
+                      $ref: '#/components/schemas/OwnedAgentResponse'
+        '400':
+          description: |
+            `owner` was supplied with a value other than `me`. The message names the
+            value received.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: |
+            `owner=me` was requested without a valid token, or the token supplied
+            was invalid or expired.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Catalogue]
+      summary: List a new agent
+      operationId: createAgent
+      description: |
+        Creates the agent and its version 1, hashes the canonical definition, and
+        registers the agent on the escrow contract. The authenticated caller becomes
+        the owner; the body cannot name a different one.
+
+        **This call is synchronous and slow on purpose — seconds, not
+        milliseconds.** It does not answer until the `registerAgent` transaction has
+        confirmed, because the response carries `onchainAgentId`, the id the escrow
+        contract assigns, and that value cannot be known before the transaction
+        lands. An agent without one cannot be bought. Size your client timeout
+        accordingly and show the seller a pending state; there is nothing to poll
+        afterwards.
+
+        The new agent is live immediately — `active` defaults to `true` and the body
+        has no field to change that. Use `PATCH /agents/{id}/active` afterwards.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: |
+            The agent was created and is registered on-chain. Receiving this body is
+            the confirmation — `onchainAgentId` is never null here.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAgentResponse'
+        '400':
+          description: |
+            The body failed validation — a missing or malformed field, or an
+            `inputSchema` / `outputSchema` that is a JSON object but not a valid
+            JSON Schema 2020-12. The offending field names are in `errors`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/{id}:
+    get:
+      tags: [Catalogue]
+      summary: Get one agent's public listing
+      operationId: getAgent
+      description: |
+        The buyer's detail screen for one agent, always reflecting its latest
+        version. **Public — no token required.**
+
+        The response deliberately omits `systemPrompt`, `model` and
+        `timeoutSeconds`. That is not an oversight and not a filter that could be
+        turned off: the query behind this route does not select those columns, so
+        the seller's prompt never enters this code path at all. The only route that
+        returns them is the owner-only `GET /agents/{id}/versions`.
+
+        An agent that is inactive, or whose on-chain registration did not complete,
+        returns `404` — exactly the same answer as an id that never existed. The
+        three cases are not distinguishable from here.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: |
+            The **agent** id. A malformed uuid is rejected with `400` before the
+            database is queried.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The agent's public listing at its latest version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentListingResponse'
+        '400':
+          description: |
+            `id` is not a well-formed uuid. Note this is the plain `ErrorResponse`
+            shape — a `400` caused by a bad **path parameter** differs from a `400`
+            caused by a bad request **body**, which returns `ValidationErrorResponse`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: |
+            No such agent, or the agent is inactive, or its on-chain registration
+            did not complete. Indistinguishable by design.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/{id}/versions:
+    get:
+      tags: [Catalogue]
+      summary: List every version of your agent, in full
+      operationId: listAgentVersions
+      description: |
+        **Owner-only, and the one route in the API that returns `systemPrompt`.**
+        The response is the complete execution spec of every version, newest first.
+        Never render it to a buyer and never log it.
+
+        Versions are immutable: publishing a new one leaves every earlier one
+        exactly as it was, which is what lets a running order keep pointing at the
+        definition it opened against.
+
+        ⚠️ **A caller who is not the owner gets `404`, not `403`** — the same answer
+        as an unknown id. A `403` here would confirm that a given uuid is a real
+        agent belonging to someone else, turning the one endpoint that discloses
+        seller IP into an existence oracle. Do not treat `404` from this route as
+        proof the agent does not exist.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: |
+            The **agent** id. A malformed uuid is rejected with `400` before the
+            database is queried.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: |
+            Every version of the agent, newest first. Never empty for an agent the
+            caller owns — an agent always has at least version 1.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentVersionDetailResponse'
+        '400':
+          description: |
+            `id` is not a well-formed uuid. Plain `ErrorResponse` shape, unlike a
+            `400` from a malformed request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: |
+            No such agent — **or** the agent exists and belongs to another account.
+            The two are answered identically on purpose.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Catalogue]
+      summary: Publish a new version of your agent
+      operationId: createAgentVersion
+      description: |
+        Owner-only. Appends a new version and leaves the previous one untouched;
+        the agent's public listing then reflects the new one.
+
+        **The body is exactly `CreateAgentRequest`, the same shape `POST /agents`
+        takes** — a version is a complete definition, so there is no partial-update
+        form. A patch would let a seller change `capabilities` without restating the
+        prompt those capabilities describe, and the definition hash covers both.
+
+        Resubmitting an identical definition is accepted rather than refused: you
+        get a new `id` and `version` carrying the same `definitionHash`, because the
+        hash is over the definition, not over the submission.
+
+        This call updates the existing on-chain agent; it does not mint a new chain
+        id, so there is no `onchainAgentId` in the response.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: |
+            The **agent** id to publish under. A malformed uuid is rejected with
+            `400` before the database is queried.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: The new version was published and the on-chain agent updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateVersionResponse'
+        '400':
+          description: |
+            Either the body failed validation — `ValidationErrorResponse`, naming
+            the offending fields, including an `inputSchema` / `outputSchema` that
+            is not a valid JSON Schema 2020-12 — or `id` is not a well-formed uuid,
+            which returns the plain `ErrorResponse` shape instead. The two `400`
+            bodies genuinely differ.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationErrorResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: |
+            The agent exists but belongs to another account. `403` rather than `404`
+            here because the caller already holds this id from their own list, so
+            confirming it exists tells them nothing they did not supply.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No agent with this id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: |
+            The agent has no on-chain counterpart to update — its original
+            registration did not complete (`listed: false` in the owner list).
+            Nothing was attempted; list the agent again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /agents/{id}/active:
+    patch:
+      tags: [Catalogue]
+      summary: Switch your agent's availability on or off
+      operationId: setAgentActive
+      description: |
+        Owner-only. Sets the agent's availability to an **absolute value** — the
+        body carries the state you want, never "toggle". That makes the call
+        idempotent: sending the value the agent already holds succeeds and changes
+        nothing, so a lost or duplicated request converges to what the seller chose
+        rather than to a parity of clicks. This is the one mutation in the API that
+        is safe to retry blind.
+
+        ⚠️ Switching an agent off stops **new** purchases only. Orders already
+        running are unaffected — that is a property of the escrow contract, which is
+        why there is no order count or warning in the response for a client to
+        misread as one.
+
+        An agent switched off disappears from the public catalogue and from
+        `GET /agents/{id}`, but remains in `GET /agents?owner=me` so it can be
+        switched back on.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: |
+            The **agent** id. A malformed uuid is rejected with `400` before the
+            database is queried.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetActiveRequest'
+      responses:
+        '200':
+          description: |
+            The state now in force. It equals what was requested — this body
+            confirms, it does not report a discovered value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetActiveResponse'
+        '400':
+          description: |
+            Either the body was malformed — `active` missing or not a JSON boolean;
+            the string `"false"` is refused rather than coerced — which returns
+            `ValidationErrorResponse`, or `id` is not a well-formed uuid, which
+            returns the plain `ErrorResponse` shape. The two `400` bodies genuinely
+            differ.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationErrorResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing, invalid, or expired bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: |
+            The agent exists but belongs to another account. `403` rather than `404`
+            because the caller already holds this id from their own list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No agent with this id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders:
+    get:
+      tags:
+        - Orders
+      summary: List the orders you placed
+      description: >-
+        Every order this account bought, newest first. A bare JSON array, no
+        envelope. Buyer view only — orders placed against agents you own are not
+        here, they are under `GET /sales`.
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The caller's orders, newest first. Empty array if there are none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BuyerOrderSummary'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Orders
+      summary: Buy an agent run
+      description: >-
+        Charges the buyer, opens the on-chain escrow deal, and creates the order.
+
+
+        ⚠️ **Not idempotent, and there is deliberately no idempotency key.** The
+        order row and its ledger debit commit before the escrow call is even
+        attempted, so a client timeout tells you nothing about whether the
+        purchase happened. **Never auto-retry this call** — not from a retry
+        policy and not from a "try again" button. Re-read `GET /orders` instead.
+
+
+        Returns `201` as soon as the escrow deal confirms. It does **not** wait
+        for the agent to run: the order comes back in `purchased` with
+        `run: null`, and execution follows asynchronously. Poll `GET /orders/{id}`.
+
+
+        Two different `400` shapes are reachable here — see the `400` response.
+      operationId: createOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: >-
+            The order was created and the escrow deal confirmed. Body is the new
+            order id only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOrderResponse'
+        '400':
+          description: >-
+            The body was malformed, or `input` did not satisfy the purchased
+            version's `inputSchema`. Shape is `ValidationErrorResponse`
+            (`{message, errors}`) — note it carries **no `statusCode`**, unlike
+            most error bodies in this API. Field-level messages arrive under
+            `errors.fieldErrors`, keyed by `agentId`, `input` or
+            `acceptanceCriteria`. Nothing was read, debited or escrowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: >-
+            The buyer's available balance is below the price. The body is
+            `InsufficientFundsResponse` — a **different shape** from every other
+            error here: `{message, availableBalanceMinor, priceMinor}`, with no
+            `statusCode`. Both figures are present so a client can show the
+            shortfall and open a top-up without a second request. Nothing was
+            charged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsufficientFundsResponse'
+        '404':
+          description: >-
+            `Agent not found`. One answer for three separate facts — the agent is
+            unknown, is inactive, or is not registered on-chain. The API will not
+            say which. Final; do not retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{id}:
+    get:
+      tags:
+        - Orders
+      summary: Read one order
+      description: >-
+        The full order, including the run's input and output once execution has
+        finished. This is the read an order screen polls (about once a second)
+        and it is the authority on the order's current state.
+
+
+        **Authorised for the order's buyer OR the owner of the agent that ran.**
+        Anyone else — including a stranger probing ids — receives `404` with a
+        body byte-for-byte identical to a nonexistent order's. There is no `403`
+        on this route by design.
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The order id.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: >-
+            The order. `run` is `null` until the agent has executed; once it has,
+            `run.output` may still be `null`, which is the evidence of
+            non-delivery rather than an error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: >-
+            `id` is not a well-formed uuid. This `400` uses `ErrorResponse`
+            (`{message, error, statusCode}`) — a **different shape** from the
+            body-validation `400` on `POST /orders`, because it comes from the
+            path-parameter pipe rather than from body validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            `Order not found`. The order does not exist, **or** it exists and the
+            caller is neither its buyer nor the owner of the agent that ran. The
+            two cases are indistinguishable on purpose — the API refuses to
+            confirm that an id exists. Treat this as final and do not retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{id}/case-file:
+    get:
+      tags:
+        - Orders
+      summary: Read the evidence behind an order
+      description: >-
+        What was asked for, what the seller promised, and what came back —
+        everything a dispute is judged on.
+
+
+        ## ⚠️ One route, two response shapes
+
+        Selection is by caller, not by any parameter:
+
+
+        - the order's **buyer** receives `BuyerCaseFileResponse`, whose `steps`
+          array is **always empty**;
+
+        - the **owner of the agent that ran** receives
+          `SellerCaseFileResponse` — the same fields plus `systemPrompt` and
+          `rawSteps`, with `steps` populated.
+
+
+        The redaction is enforced in the query, not in a formatter: on a buyer's
+        read the system prompt is never selected, so it cannot leak through a log
+        line or a stack trace either. A client that may be either party must
+        branch on the presence of `systemPrompt`.
+
+
+        Answers for an order in **any** state. A `purchased` order returns
+        `output: null` and `steps: []`; that is content, not an error.
+      operationId: getOrderCaseFile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The order id.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: >-
+            The case file — buyer shape or seller shape, depending on which party
+            the caller is.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/BuyerCaseFileResponse'
+                  - $ref: '#/components/schemas/SellerCaseFileResponse'
+        '400':
+          description: >-
+            `id` is not a well-formed uuid. Uses `ErrorResponse`
+            (`{message, error, statusCode}`), unlike the body-validation `400`
+            elsewhere in this API.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            `Order not found`. The order does not exist, or the caller is neither
+            its buyer nor the owner of the agent that ran. Indistinguishable by
+            design; final, do not retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{id}/accept:
+    post:
+      tags:
+        - Orders
+      summary: Accept delivery and release the escrow
+      description: >-
+        The buyer takes delivery; the full price is released to the seller. No
+        request body — the id in the path is the whole request.
+
+
+        ⚠️ **Returns `202`, not `200`.** The on-chain settlement continues after
+        this response returns, so the body carries the order id and nothing else.
+        Do not read a settled state out of it — re-read `GET /orders/{id}`, which
+        is the authority.
+
+
+        ⚠️ **Buyer only.** A seller reaching this receives **`404`, not `403`**
+        (verified against the running API) — the same body a stranger gets. That
+        is deliberately a different rule from the reads on this order, which do
+        admit the agent's owner.
+      operationId: acceptOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The order id.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: >-
+            Accepted. Settlement is in flight; the body is the order id only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderAcknowledgement'
+        '400':
+          description: >-
+            `id` is not a well-formed uuid. Uses `ErrorResponse`
+            (`{message, error, statusCode}`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            `Order not found`. The order does not exist, the caller is not its
+            buyer, **or the caller is the seller** — all three produce this
+            identical body. Final; do not retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            The order is not in a state where it can be accepted — for example
+            `Order is settled and this action is not available in that state.`
+            The message names the current state. Re-read the order rather than
+            retrying.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{id}/complain:
+    post:
+      tags:
+        - Orders
+      summary: Dispute a delivery
+      description: >-
+        The buyer disputes and hands the order to the auditor. The seller is
+        notified and has no right of reply.
+
+
+        ⚠️ **Returns `202`, not `200`.** The dispute is registered on chain after
+        this response returns; the body is the order id only. Poll
+        `GET /orders/{id}/verdict` for the ruling — it will answer `404
+        VERDICT_NOT_FOUND` until the audit finishes.
+
+
+        ⚠️ **Buyer only.** A seller reaching this receives **`404`, not `403`**
+        (verified against the running API).
+
+
+        Retrying this call is safe in a way retrying `POST /orders` is not: a
+        second attempt meets an order that has already moved and is refused with
+        `409` rather than filing a second dispute.
+      operationId: complainAboutOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The order id.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplainRequest'
+      responses:
+        '202':
+          description: >-
+            The complaint was filed and the audit was queued. Body is the order
+            id only.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderAcknowledgement'
+        '400':
+          description: >-
+            Two different shapes reach this status on this route, and a client
+            must handle both. A malformed **body** (missing or blank `reason`)
+            returns `ValidationErrorResponse` — `{message, errors}`, with no
+            `statusCode`. A malformed **path uuid** returns `ErrorResponse` —
+            `{message, error, statusCode}`. Distinguish them by the presence of
+            `errors`.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ValidationErrorResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            `Order not found`. The order does not exist, the caller is not its
+            buyer, **or the caller is the seller**. Final; do not retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            The dispute is not available. Several distinct causes share this
+            status, distinguishable only by `message`: the order is in a state
+            that cannot be disputed (`Order is settled and this action is not
+            available in that state.`), the review window has closed, a complaint
+            has already been filed, or the order was never escrowed and its
+            payment was already returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /orders/{id}/verdict:
+    get:
+      tags:
+        - Orders
+      summary: Read the auditor's ruling on a disputed order
+      description: >-
+        The verdict for an order that was complained about: the refund tier, the
+        cents actually refunded, the auditor's written reasoning, and the
+        passages it relied on.
+
+
+        **Authorised for the order's buyer OR the owner of the agent that ran.**
+
+
+        ## ⚠️ The error bodies on this route are unlike every other route's
+
+        Failures here return a bare `VerdictErrorResponse` — `{"error": "CODE"}`,
+        with **no `statusCode` and no `message`**. A generic error renderer that
+        reads `message` will show nothing.
+
+
+        ## ⚠️ Two different 404s, opposite meanings
+
+        Branch on `error`, never on the status alone:
+
+
+        - `ORDER_NOT_FOUND` (404) — the order does not exist or is not yours.
+          Terminal; stop polling.
+
+        - `VERDICT_NOT_FOUND` (404) — the order exists, you are a party, and the
+          audit has not finished. **Keep polling**; this is the normal state for
+          the seconds after a complaint is filed.
+
+        - `AUDIT_FAILED` (409) — terminal. The audit gave up after `attempts`
+          tries at `failedAt`, and no verdict will ever appear for this order.
+      operationId: getOrderVerdict
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The order id.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The verdict. Immutable once written; there is no appeal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerdictResponse'
+        '400':
+          description: >-
+            `id` is not a well-formed uuid. ⚠️ This one failure on this route
+            does **not** use `VerdictErrorResponse` — it is raised by the
+            path-parameter pipe before the handler runs, so it is the ordinary
+            `ErrorResponse` (`{message, error, statusCode}`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: >-
+            Either `ORDER_NOT_FOUND` — the order does not exist or the caller is
+            neither buyer nor agent owner, which is terminal — or
+            `VERDICT_NOT_FOUND`, which means the audit is still running and the
+            caller should poll. **These mean opposite things; read `error` to
+            tell them apart.**
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerdictErrorResponse'
+        '409':
+          description: >-
+            `AUDIT_FAILED` — the audit failed after `attempts` tries and was
+            abandoned at `failedAt`. Terminal: nothing retries and no verdict
+            will ever exist for this order. `attempts` and `failedAt` appear only
+            on this response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerdictErrorResponse'
+
+  /sales:
+    get:
+      tags:
+        - Sales
+      summary: List the orders placed against your agents
+      description: >-
+        The seller's side: every order bought from an agent this account owns,
+        newest first. A bare JSON array, no envelope.
+
+
+        ⚠️ Rows are `SaleResponse`, which is **not** the buyer's row shape —
+        there is no `deliveredAt` field on a sale at all. Do not render this list
+        with code written for `GET /orders`.
+      operationId: listSales
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: The caller's sales, newest first. Empty array if there are none.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SaleResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        The token returned by `POST /auth/verify`. Sent as
+        `Authorization: Bearer <token>`. The guard is global and fail-closed, so an
+        operation is protected unless this document marks it otherwise.
+  schemas:
+    OrderState:
+      type: string
+      description: |
+        Where an order stands. The frontend branches on every one of these, so the
+        list is closed and complete.
+
+        `purchased` → `running` → `delivered` | `failed`, then `released` (accepted
+        or swept) or `disputed` → `adjudicated` → `settled`.
+      enum:
+        - purchased
+        - running
+        - delivered
+        - failed
+        - released
+        - disputed
+        - adjudicated
+        - settled
+
+    LedgerKind:
+      type: string
+      description: |
+        What a ledger entry represents. The ledger is append-only and a balance is
+        the sum of its entries — there is no mutable balance column anywhere.
+
+        Note there is no `settlement` member, deliberately: settled money is credited
+        on-chain at the user's own address and has no database representation.
+      enum:
+        - onramp
+        - purchase
+        - offramp
+        - adjustment
+
+    VerdictTier:
+      type: string
+      description: |
+        How much of the buyer's payment a ruling returns: none (0%), quarter (25%),
+        half (50%), three_quarter (75%), full (100%). Five members, not four.
+      enum:
+        - none
+        - quarter
+        - half
+        - three_quarter
+        - full
+
+    CitationSource:
+      type: string
+      description: |
+        What a citation is quoting: something the agent claimed it could do, something
+        the listing explicitly refused to do, or something the buyer required.
+      enum:
+        - capability
+        - exclusion
+        - criterion
+
+    ErrorResponse:
+      type: object
+      description: |
+        The ordinary failure body — most of the API returns this shape.
+
+        Two documented exceptions: a request-body validation failure omits
+        `statusCode` and carries `errors` instead (see `ValidationErrorResponse`), and
+        `GET /orders/{id}/verdict` returns a bare error code (see
+        `VerdictErrorResponse`). Do not write a client that assumes one shape.
+      required: [statusCode, message]
+      properties:
+        statusCode:
+          type: integer
+          description: Repeats the HTTP status.
+        message:
+          type: string
+          description: Human-readable, safe to display. Never machine-parsed — the wording is not contractual.
+        error:
+          type: string
+          description: The HTTP reason phrase, e.g. `Not Found`. Present on exceptions constructed with a string message.
+      additionalProperties: false
+
+    ValidationErrorResponse:
+      type: object
+      description: |
+        Returned when a request **body** fails schema validation.
+
+        ⚠️ This body has **no `statusCode`** — the validation pipe passes an object to
+        the exception, and an object payload becomes the whole body. A 400 caused by a
+        malformed UUID in the **path** returns `ErrorResponse` instead, so the same
+        operation can answer 400 with two different shapes.
+      required: [message, errors]
+      properties:
+        message:
+          type: string
+          const: Validation failed
+        errors:
+          type: object
+          description: The flattened validation report.
+          required: [formErrors, fieldErrors]
+          properties:
+            formErrors:
+              type: array
+              description: Errors that apply to the body as a whole rather than to one field.
+              items:
+                type: string
+            fieldErrors:
+              type: object
+              description: Field name → the messages for that field.
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+      additionalProperties: false
+
+    ChainOutcomeUnknownResponse:
+      type: object
+      description: |
+        The `502` returned when a transaction was broadcast but its outcome could not
+        be established — a timeout waiting for the receipt, typically.
+
+        ⚠️ Like the validation body, this one has **no `statusCode`** and no `error`,
+        because it is built from an object literal. It is the only 502 shape carrying a
+        transaction hash; every other chain failure returns the ordinary
+        `ErrorResponse`.
+
+        **Do not treat this as a failure.** The transaction may still confirm. Follow
+        `txHash` on the explorer before retrying anything that moves money.
+      required: [message, txHash]
+      properties:
+        message:
+          type: string
+        txHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]+$'
+          description: The broadcast transaction, so the caller can check it themselves.
+      additionalProperties: false
+
+    SeededAgentResponse:
+      type: object
+      description: One of the three demo agents, as published.
+      required: [key, agentId, onchainAgentId, name, priceMinor, version, definitionHash, created]
+      properties:
+        key:
+          type: string
+          description: Stable identifier for the seeded agent.
+          enum: [ledgerbot, tldr, polyglot]
+        agentId:
+          type: string
+          format: uuid
+        onchainAgentId:
+          type: integer
+          format: int64
+          description: The id the escrow contract assigned at registration.
+        name:
+          type: string
+        priceMinor:
+          type: integer
+          format: int64
+          description: US cents.
+        version:
+          type: integer
+        definitionHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]+$'
+          description: Hash of the definition committed on-chain.
+        created:
+          type: boolean
+          description: |
+            `true` if this call created the agent, `false` if it already existed.
+            Seeding is idempotent, so a second call returns the same ids with `false`.
+      additionalProperties: false
+
+    SeededFixtureResponse:
+      type: object
+      description: |
+        One demo act's content — everything needed to drive it without retyping.
+        A retyped input is a different input and produces a live run rather than the
+        scripted one, so post these values verbatim.
+      required: [act, agentKey, agentId, input, acceptanceCriteria, complaint, expectedTier]
+      properties:
+        act:
+          type: integer
+          enum: [1, 2, 3]
+        agentKey:
+          type: string
+          enum: [ledgerbot, tldr, polyglot]
+        agentId:
+          type: string
+          format: uuid
+        input:
+          type: object
+          description: Post this to `POST /orders` as `input`, unchanged.
+          additionalProperties: true
+        acceptanceCriteria:
+          type: string
+        complaint:
+          type: string
+          description: The reason to send to `POST /orders/{id}/complain`.
+        expectedTier:
+          type: string
+          description: |
+            The tier this act is built to reach. Only three of `VerdictTier`'s five
+            members can appear here, so this is deliberately not a `$ref` — widening it
+            would document values the route cannot return.
+          enum: [none, half, full]
+      additionalProperties: false
+
+    SeedResponse:
+      type: object
+      description: |
+        ⚠️ Carries no system prompts. This route is unauthenticated, so its response is
+        a public surface and the seeded agents' instructions are seller property.
+      required: [seller, agents, fixtures]
+      properties:
+        seller:
+          type: object
+          description: The demo seller that owns all three agents and receives every payout on stage.
+          required: [accountId, walletAddress]
+          properties:
+            accountId:
+              type: string
+              format: uuid
+            walletAddress:
+              type: string
+              pattern: '^0x[a-fA-F0-9]{40}$'
+          additionalProperties: false
+        agents:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeededAgentResponse'
+        fixtures:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeededFixtureResponse'
+      additionalProperties: false
+
+    ResetResponse:
+      type: object
+      description: What a reset cleared and what it deliberately left standing.
+      required: [cleared, kept, note]
+      properties:
+        cleared:
+          type: object
+          required: [orders, ordersInFlight, runs, complaints, verdicts, ledgerEntriesUnlinked]
+          properties:
+            orders:
+              type: integer
+            ordersInFlight:
+              type: integer
+              description: |
+                How many of those orders were mid-flight. Non-zero means funds were left
+                escrowed on-chain — clearing the record cannot recall them.
+            runs:
+              type: integer
+            complaints:
+              type: integer
+            verdicts:
+              type: integer
+            ledgerEntriesUnlinked:
+              type: integer
+              description: |
+                Ledger entries whose `orderId` was cleared. The entries themselves survive —
+                the ledger is append-only and is never deleted or reversed.
+          additionalProperties: false
+        kept:
+          type: object
+          required: [accounts, agents, ledgerEntries]
+          properties:
+            accounts:
+              type: integer
+            agents:
+              type: integer
+            ledgerEntries:
+              type: integer
+          additionalProperties: false
+        note:
+          type: string
+          description: A plain-language statement of what a reset does not undo.
+      additionalProperties: false
+
+    HealthCheckResponse:
+      type: object
+      description: |
+        The health-check library's own shape, transcribed from a live response rather
+        than from its types. `error` is `{}` when everything is up.
+      required: [status, info, error, details]
+      properties:
+        status:
+          type: string
+          enum: [ok, error, shutting_down]
+        info:
+          type: object
+          description: Indicators that are up. Keyed by indicator name, e.g. `database`.
+          additionalProperties:
+            $ref: '#/components/schemas/HealthIndicator'
+        error:
+          type: object
+          description: Indicators that are down. Empty when healthy.
+          additionalProperties:
+            $ref: '#/components/schemas/HealthIndicator'
+        details:
+          type: object
+          description: Every indicator, up or down.
+          additionalProperties:
+            $ref: '#/components/schemas/HealthIndicator'
+      additionalProperties: false
+
+    HealthIndicator:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [up, down]
+        message:
+          type: string
+          description: Present when the indicator is down.
+      additionalProperties: true
+
+    NonceRequest:
+      type: object
+      description: >-
+        Body of `POST /auth/nonce`. A challenge is issued for any well-formed
+        address, registered or not — refusing unknown addresses would turn this
+        route into a way to enumerate which wallets hold accounts.
+      required: [address]
+      additionalProperties: true
+      x-unknown-properties: |
+        Verified against the running API: unknown properties are accepted and silently
+        stripped, not rejected — a request carrying an extra key returns 200, not 400.
+        Documented open because that is what happens, not because extra keys are useful.
+      properties:
+        address:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: >-
+            0x-prefixed 40-hex-char wallet address. Any casing is accepted;
+            the server canonicalises to EIP-55 when it stores the account.
+          example: '0x1111111111111111111111111111111111111111'
+
+    NonceResponse:
+      type: object
+      description: >-
+        The single-use challenge plus the exact bytes to sign. Issuing a second
+        challenge for the same address invalidates the first, so at most one is
+        ever outstanding.
+      required: [nonce, message]
+      properties:
+        nonce:
+          type: string
+          description: >-
+            32 random bytes, hex (no 0x prefix). Valid for one use or five
+            minutes, whichever comes first.
+          example: 3a406e5942e2cd7466f247826f042cfff24fbec3ca4d04491c15f64349fd73dd
+        message:
+          type: string
+          description: >-
+            The exact string to pass to `personal_sign` — byte for byte,
+            newlines included. Do NOT recompose this client-side from a
+            template; the format is server-owned, and any drift surfaces only
+            as an opaque signature-verification failure. It embeds the address
+            and the nonce.
+          example: |-
+            Guardian: sign in to your account.
+
+            This signature proves you own this wallet.
+            It is not a transaction and costs nothing.
+
+            Address: 0x1111111111111111111111111111111111111111
+            Nonce: 3a406e5942e2cd7466f247826f042cfff24fbec3ca4d04491c15f64349fd73dd
+
+    VerifyRequest:
+      type: object
+      description: Body of `POST /auth/verify` — the signature over `NonceResponse.message`.
+      required: [address, signature]
+      additionalProperties: true
+      x-unknown-properties: |
+        Verified against the running API: unknown properties are accepted and silently
+        stripped, not rejected — a request carrying an extra key returns 200, not 400.
+        Documented open because that is what happens, not because extra keys are useful.
+      properties:
+        address:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+          description: The address the challenge was issued for.
+        signature:
+          type: string
+          pattern: '^0x[a-fA-F0-9]+$'
+          minLength: 3
+          description: >-
+            0x-prefixed hex signature. Length is deliberately not pinned (a
+            65-byte EOA signature is the common case, but smart-account
+            signatures differ). A signature that is shaped right but cannot be
+            recovered is a `401`, not a `400`.
+
+    VerifyResponse:
+      type: object
+      description: >-
+        The session token and nothing else. No account id, no address, and no
+        indication of whether this sign-in created an account or reused an
+        existing one — "was this address already registered" is deliberately
+        kept off the wire. Call `GET /auth/session` with the new token to learn
+        the account id.
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: >-
+            JWT bearer token. Valid for 7 days; there is no refresh and no
+            revocation, so expiry is the only way a session ends. Send it as
+            `Authorization: Bearer <token>`.
+
+    SessionResponse:
+      type: object
+      description: >-
+        Who the presented token belongs to — the narrow "is my stored token
+        still good, and whose is it" question a client asks on load. It is
+        deliberately NOT `/me`: no balances are read, so no Postgres sum and no
+        chain read sit behind it.
+      required: [accountId, address]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          example: fe3d6abd-8e01-4e51-811e-63b4858def4d
+        address:
+          type: string
+          description: EIP-55 checksummed wallet address, exactly as stored.
+          example: '0x8cf01d79743C634c6417b265C04D2A0d1c2E8AC5'
+
+    AccountSummaryResponse:
+      type: object
+      description: >-
+        The account and its three money figures — returned by `GET /me`,
+        `POST /topup` and `POST /offramp` (the last two so the balance widget is
+        correct without a second round trip).
+
+        Three separate figures, never one combined `balance`: money lives in the
+        platform ledger, in the escrow contract, and in the user's settled
+        on-chain balance, and a single number would be wrong for two of them.
+        The consequence that reads like a bug and is not: a refund moves money
+        from escrow to settled, so `availableBalanceMinor` does not change.
+      required:
+        - accountId
+        - address
+        - availableBalanceMinor
+        - inEscrowMinor
+        - settledFundsMinor
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          example: fe3d6abd-8e01-4e51-811e-63b4858def4d
+        address:
+          type: string
+          description: >-
+            EIP-55 checksummed, exactly as stored. This is the payout
+            destination for every refund and sale — do not lower-case it.
+          example: '0x8cf01d79743C634c6417b265C04D2A0d1c2E8AC5'
+        availableBalanceMinor:
+          type: integer
+          format: int64
+          description: >-
+            US cents. Spendable platform balance — the sum of every row in
+            `GET /me/ledger`. Never null. Money escrowed against an open order
+            is not part of this sum.
+          example: 1500
+        inEscrowMinor:
+          type: integer
+          format: int64
+          description: >-
+            US cents currently locked against this buyer's open orders. Never
+            null.
+          example: 0
+        settledFundsMinor:
+          type: [integer, "null"]
+          format: int64
+          description: >-
+            US cents currently withdrawable from the escrow contract — the input
+            to `POST /withdraw`.
+
+            ⚠️ This is a best-effort CHAIN read, and it is `null` when the chain
+            could not be read inside the request's budget (unreachable node,
+            timeout). The key is ALWAYS present; `null` means UNKNOWN, never
+            zero. `GET /me` still answers `200` in that case — only a Postgres
+            failure can fail it.
+
+            ⚠️ Never write `settledFundsMinor ?? 0`. That tells a user whose
+            settled funds could not be read that they have none. Render `—` for
+            `null` and `$0.00` for `0`; both disable the Withdraw button, with
+            different wording.
+          example: 0
+          x-captured: "value was 0; the null branch was not captured live"
+
+    LedgerEntryResponse:
+      type: object
+      description: >-
+        One row of the account statement. The sum of `amountMinor` across the
+        whole `GET /me/ledger` array equals `availableBalanceMinor` from
+        `GET /me` — both derive from the same append-only table.
+      required: [id, amountMinor, kind, orderId, externalRef, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 1867a3b1-57ad-465f-9dbb-fbc9e52fa92f
+        amountMinor:
+          type: integer
+          format: int64
+          description: >-
+            ⚠️ SIGNED US cents — positive is a credit, negative is a debit.
+            There is no separate direction field: the sign IS the direction, so
+            taking `Math.abs` of it anywhere turns a cash-out into a top-up.
+          example: 1500
+        kind:
+          $ref: '#/components/schemas/LedgerKind'
+        orderId:
+          type: [string, "null"]
+          format: uuid
+          description: >-
+            The order this entry paid for. Set on `purchase` entries only;
+            `null` otherwise. The key is always present.
+        externalRef:
+          type: [string, "null"]
+          description: >-
+            On-chain transaction hash for `onramp` / `offramp` entries, `null`
+            otherwise. The only link from a ledger row back to the money that
+            actually moved — paste it into a block explorer to check the claim.
+            The key is always present.
+          example: '0xf1115dab8ed19f0260d0c03017df104842e23dfd7ef5c19f4528187fd6f24beb'
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC, from `Date.prototype.toISOString()`.
+          example: '2026-08-09T10:39:51.220Z'
+
+    AmountRequest:
+      type: object
+      description: >-
+        The one-field money body shared by `POST /topup`, `POST /offramp`,
+        `POST /onramp/routes` and `POST /offramp/routes`.
+
+        ⚠️ Cents, never dollars. `12.34` is not "twelve dollars thirty-four" —
+        it is a non-integer and it is refused with a `400` before the handler
+        runs, before any balance is read and long before anything is signed.
+
+        Neither a source nor a destination is accepted on any of these routes,
+        and that absence is a security control: both ends of every transfer are
+        fixed by the flow and by the session, never named by the caller.
+      required: [amountMinor]
+      additionalProperties: true
+      x-unknown-properties: |
+        Verified against the running API: unknown properties are accepted and silently
+        stripped, not rejected — a request carrying an extra key returns 200, not 400.
+        Documented open because that is what happens, not because extra keys are useful.
+      properties:
+        amountMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+          description: >-
+            Whole, positive US cents. Zero is refused: a zero top-up would
+            broadcast an ERC-20 transfer of nothing and still pay the full gas
+            ceiling, and a zero cash-out would append a meaningless row to an
+            append-only ledger. The upper bound is `Number.MAX_SAFE_INTEGER` —
+            past it JavaScript cannot represent the integer at all. There is no
+            policy cap here; the real ceilings are live state (the funder
+            wallet's balance for a top-up, `availableBalanceMinor` for a
+            cash-out) and produce a `409`, not a `400`.
+          example: 500
+
+    WithdrawResponse:
+      type: object
+      description: >-
+        `POST /withdraw` success — proof of the on-chain payout.
+
+        Deliberately NOT an `AccountSummaryResponse`, unlike `/topup` and
+        `/offramp`: a withdrawal moves settled on-chain funds and writes no
+        ledger row at all, so the statement is byte-identical before and after.
+        Refetch `GET /me` afterwards for the new `settledFundsMinor`.
+      required: [txHash, amountMinor, explorerUrl]
+      properties:
+        txHash:
+          type: string
+          description: >-
+            0x-prefixed hash of the confirmed `withdrawFor` transaction. A
+            product requirement, not debug output: it is the one fact on the
+            wallet screen a sceptic can verify independently.
+        amountMinor:
+          type: integer
+          format: int64
+          description: >-
+            US cents moved, taken from the pre-read that gated the call.
+
+            ⚠️ Read BEFORE the transaction, so it can be a moment stale — a
+            settlement landing in between makes the real payout larger than this
+            figure. `withdrawFor` always moves the whole balance at execution
+            time, so the money is right even when the receipt's number is old.
+        explorerUrl:
+          type: string
+          format: uri
+          description: Public block-explorer link for `txHash`.
+
+    RainStubResponse:
+      type: object
+      description: >-
+        What the two fiat-rail endpoints return. They assemble the real Rain
+        request, log it, and return without calling anything — Monad is not a
+        supported Rain payment-route rail, so the call cannot complete. Money
+        actually moves through the funder wallet instead (`/topup`,
+        `/offramp`).
+
+        ⚠️ There is no `id`, `status` or `routeId` field, and none may be added:
+        those are the keys a real Rain success carries, and the failure mode
+        being designed out is this JSON being mistaken for a working
+        integration. The `200` status covers the body being honest, not the
+        integration working.
+      required: [stub, rainCallMade, reason, wouldHaveSent]
+      properties:
+        stub:
+          type: boolean
+          const: true
+          description: Always `true`. Nothing here talked to Rain.
+        rainCallMade:
+          type: boolean
+          const: false
+          description: Always `false`. Not "failed", not "retried" — never attempted.
+        reason:
+          type: string
+          description: >-
+            Why no call was made, in one sentence, including the live
+            `RAIN_ENABLED` value. Note that flipping `RAIN_ENABLED` to `true`
+            changes this string and nothing else — the live path does not exist.
+          example: 'Monad is not a supported payment-route rail; RAIN_ENABLED=false'
+        wouldHaveSent:
+          type: object
+          description: >-
+            The request Rain would have received, verbatim — enough to
+            reproduce it with `curl`. There is no `headers` member by
+            construction, which is how the API key (an `Api-Key` header, never a
+            body field) stays out of the logs this object is written to.
+          required: [method, url, body]
+          properties:
+            method:
+              type: string
+              const: POST
+            url:
+              type: string
+              format: uri
+              example: https://api-dev.raincards.xyz/v1/payment-routes
+            body:
+              type: object
+              additionalProperties: true
+              description: >-
+                Rain's `POST /payment-routes` body. Carries `teamId`, `userId`,
+                `collateralContractId` (all deployment-level configuration),
+                `direction` (`onramp` | `offramp` — a label for the log, not a
+                Rain field), `amount` as a plain decimal dollar string
+                (`500` cents → `"5.00"`), and `source` / `destination` legs. The
+                crypto leg is `{ currency: usdc, rail: monad, address: { type:
+                onchain, address: <operator pool> } }` and the fiat leg is
+                `{ currency: usd, rail: ach }`; the two swap sides between
+                onramp and offramp. `rail: monad` is the field that cannot be
+                honoured — that is the point of the endpoint.
+        depositAddress:
+          type: string
+          description: >-
+            ⚠️ `POST /offramp/routes` ONLY. On the onramp response this key is
+            absent entirely (not `null`, not `undefined`) — money would arrive
+            from a bank there, so there is nothing to send funds to.
+
+            On the offramp it is the address Rain would have handed back for the
+            USDC deposit. The stub returns the funder wallet, which behaves the
+            same way: a client that took this at face value and sent test USDC
+            to it would be doing the correct thing.
+          example: '0xA9597027De1f1bCE5ef997362d3dB4891a15AE40'
+
+    AgentSummaryResponse:
+      type: object
+      description: |
+        One row of the public catalogue (`GET /agents` with no query). Every entry
+        here is active and successfully registered on-chain, so there is no
+        availability flag: an agent a buyer can see is an agent a buyer can buy.
+      required:
+        - id
+        - name
+        - description
+        - priceMinor
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: |
+            The **agent** id — the value `GET /agents/{id}` and a purchase are
+            addressed with. Not the version id and not the on-chain id.
+        name:
+          type: string
+          description: Name taken from the agent's latest version.
+        description:
+          type: string
+          description: Description taken from the agent's latest version.
+        priceMinor:
+          type: integer
+          format: int64
+          description: Price in US cents, from the latest version.
+
+    OwnedAgentResponse:
+      type: object
+      description: |
+        One row of the seller's own list (`GET /agents?owner=me`). This is the only
+        view in the product that includes **inactive** agents, and agents whose
+        on-chain registration did not complete. Hiding them here would make the
+        availability toggle one-way — an agent missing from its owner's list could
+        never be switched back on.
+      required:
+        - id
+        - name
+        - description
+        - priceMinor
+        - active
+        - listed
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The agent id.
+        name:
+          type: string
+          description: Name taken from the agent's latest version.
+        description:
+          type: string
+          description: Description taken from the agent's latest version.
+        priceMinor:
+          type: integer
+          format: int64
+          description: Price in US cents, from the latest version.
+        active:
+          type: boolean
+          description: |
+            The seller's availability switch, as set by `PATCH /agents/{id}/active`.
+            `false` means the agent is hidden from the public catalogue; running
+            orders are unaffected.
+        listed:
+          type: boolean
+          description: |
+            Whether the on-chain registration actually landed. `false` means the
+            agent exists in the database but has no on-chain counterpart, so no
+            buyer can see or purchase it and `POST /agents/{id}/versions` will
+            answer `409`. Worth surfacing in the UI — an agent with
+            `active: true, listed: false` looks healthy but is invisible to buyers.
+
+    AgentListingResponse:
+      type: object
+      description: |
+        The public detail view of one agent (`GET /agents/{id}`), always the latest
+        version. Deliberately carries no `systemPrompt`, `model` or
+        `timeoutSeconds` — those are seller intellectual property and are only ever
+        returned by the owner-only `GET /agents/{id}/versions`.
+      required:
+        - id
+        - name
+        - description
+        - priceMinor
+        - capabilities
+        - exclusions
+        - inputSchema
+        - outputSchema
+        - version
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: |
+            The **agent** id (not the version id) — the same uuid the buyer clicked
+            in the catalogue and the one a purchase is posted against.
+        name:
+          type: string
+        description:
+          type: string
+        priceMinor:
+          type: integer
+          format: int64
+          description: The buyer's price quote for this listing, in US cents.
+        capabilities:
+          type: array
+          description: |
+            What the seller claims the agent does — half of the yardstick a dispute
+            is judged against. May be empty, never absent.
+          items:
+            type: string
+        exclusions:
+          type: array
+          description: |
+            What the seller explicitly states the agent does not do — the defensive
+            half of the same yardstick. May be empty, never absent.
+          items:
+            type: string
+        inputSchema:
+          type: object
+          additionalProperties: true
+          description: |
+            Arbitrary JSON Schema (2020-12) supplied by the seller; a buyer's input
+            must satisfy it. Every object within it — the root object and every
+            nested object — must set `additionalProperties: false`, or the run is
+            refused at execution time by the model service.
+        outputSchema:
+          type: object
+          additionalProperties: true
+          description: |
+            Arbitrary JSON Schema (2020-12) supplied by the seller; the run's output
+            is validated against it, which is what a non-delivery claim is measured
+            with. Every object within it — the root object and every nested object —
+            must set `additionalProperties: false`, or the run is refused at
+            execution time by the model service.
+        version:
+          type: integer
+          description: |
+            Which version of the definition this listing is. Always the latest one.
+            An order pins the version it opened against, so this number is what a
+            buyer is quoted, not necessarily what an older order is running.
+
+    AgentVersionDetailResponse:
+      type: object
+      description: |
+        One complete agent version, including the execution spec. Returned **only**
+        by the owner-only `GET /agents/{id}/versions`. Versions are immutable —
+        publishing a new one never modifies or deletes an existing one.
+      required:
+        - id
+        - version
+        - name
+        - description
+        - capabilities
+        - exclusions
+        - priceMinor
+        - inputSchema
+        - outputSchema
+        - systemPrompt
+        - model
+        - timeoutSeconds
+        - definitionHash
+        - createdAt
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The **version** id, not the agent id.
+        version:
+          type: integer
+          description: Version number, starting at 1 and incrementing by one.
+        name:
+          type: string
+        description:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        exclusions:
+          type: array
+          items:
+            type: string
+        priceMinor:
+          type: integer
+          format: int64
+          description: Price in US cents for this version.
+        inputSchema:
+          type: object
+          additionalProperties: true
+          description: |
+            Arbitrary JSON Schema (2020-12) supplied by the seller; a buyer's input
+            must satisfy it. Every object within it — the root object and every
+            nested object — must set `additionalProperties: false`, or the run is
+            refused at execution time by the model service.
+        outputSchema:
+          type: object
+          additionalProperties: true
+          description: |
+            Arbitrary JSON Schema (2020-12) supplied by the seller; the run's output
+            is validated against it. Every object within it — the root object and
+            every nested object — must set `additionalProperties: false`, or the run
+            is refused at execution time by the model service.
+        systemPrompt:
+          type: string
+          description: |
+            ⚠️ RESTRICTED — seller intellectual property. This is the only response
+            shape in the entire API that carries it, and the only route that returns
+            it is owner-scoped. It must never be rendered to a buyer, embedded in a
+            shared link, put in an error message, or written to a log or analytics
+            payload. Treat it like a credential.
+        model:
+          type: string
+          description: |
+            The model this version runs on, e.g. `claude-haiku-4-5`. Free text with
+            no allowlist — a string that does not resolve fails at run time, not at
+            publish time.
+        timeoutSeconds:
+          type: integer
+          description: |
+            Seconds after which the run counts as non-delivery. Defaults to 120 when
+            the create request omits it.
+        definitionHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]+$'
+          description: |
+            keccak256 of the canonical definition as a `0x`-prefixed hex string, so
+            the seller can verify the commitment against the chain by hand.
+        createdAt:
+          type: string
+          format: date-time
+          description: When this version was published (ISO 8601, UTC).
+
+    CreateAgentRequest:
+      type: object
+      description: |
+        The complete definition of an agent version. Used by **both** `POST /agents`
+        and `POST /agents/{id}/versions` — a version is a full definition whether it
+        is the first or the eleventh, so there is no partial-update shape.
+
+        Two fields you might expect are deliberately not accepted: `active`
+        (a new agent is always live; availability is changed afterwards through
+        `PATCH /agents/{id}/active`) and any owner field (the authenticated caller
+        is the owner).
+      required:
+        - name
+        - description
+        - capabilities
+        - exclusions
+        - priceMinor
+        - inputSchema
+        - outputSchema
+        - systemPrompt
+        - model
+      additionalProperties: true
+      x-unknown-properties: |
+        Verified against the running API: unknown properties are accepted and silently
+        stripped, not rejected — a request carrying an extra key returns 200, not 400.
+        Documented open because that is what happens, not because extra keys are useful.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: |
+            Trimmed before validation, so a value of only whitespace is a `400`.
+        description:
+          type: string
+          minLength: 1
+          description: Trimmed before validation; must be non-empty after trimming.
+        capabilities:
+          type: array
+          description: |
+            What the agent claims to do. May be an empty array, but the key must be
+            present — an absent key is a `400`, never a silent default.
+          items:
+            type: string
+        exclusions:
+          type: array
+          description: |
+            What the agent explicitly does not do. May be empty, must be present.
+          items:
+            type: string
+        priceMinor:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 9007199254740991
+          description: |
+            Price in US cents — whole cents, never dollars. `12.34` is a non-integer
+            here and is refused.
+        inputSchema:
+          type: object
+          additionalProperties: true
+          description: |
+            Arbitrary JSON Schema (2020-12) the buyer's input must satisfy. Checked
+            here for being a JSON object and for validating as JSON Schema 2020-12;
+            a failure names `inputSchema` in the `400`.
+
+            Every object within it — the root object and every nested object — must
+            set `additionalProperties: false`, or the run is refused at execution
+            time by the model service. That requirement is *not* enforced at publish
+            time, so an agent can be listed successfully and fail every run.
+        outputSchema:
+          type: object
+          additionalProperties: true
+          description: |
+            Arbitrary JSON Schema (2020-12) the run's output is validated against.
+            Same publish-time checks as `inputSchema`, with failures naming
+            `outputSchema`.
+
+            Every object within it — the root object and every nested object — must
+            set `additionalProperties: false`, or the run is refused at execution
+            time by the model service.
+        systemPrompt:
+          type: string
+          minLength: 1
+          description: |
+            ⚠️ RESTRICTED — seller intellectual property. Accepted here and echoed
+            back only by the owner-only `GET /agents/{id}/versions`; no buyer-facing
+            response can carry it. Trimmed, non-empty.
+        model:
+          type: string
+          minLength: 1
+          description: |
+            e.g. `claude-haiku-4-5`. Free text, no allowlist — the platform does not
+            decide which models a seller may pick, so a bad value fails at run time
+            rather than at publish time.
+        timeoutSeconds:
+          type: integer
+          minimum: 1
+          default: 120
+          description: |
+            Seconds beyond which the run counts as non-delivery. Optional on the
+            wire; defaults to 120 and is always present on the stored version, since
+            the value feeds the hashed canonical definition.
+
+    CreateAgentResponse:
+      type: object
+      description: |
+        The `201` body of `POST /agents`. Receiving this shape means the agent is
+        on-chain — the route does not answer until the registration transaction has
+        confirmed.
+      required:
+        - id
+        - version
+        - onchainAgentId
+        - definitionHash
+        - active
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The new agent id — what every other catalogue route takes.
+        version:
+          type: integer
+          description: Always `1`; a newly listed agent has exactly one version.
+        onchainAgentId:
+          type: integer
+          format: int64
+          description: |
+            The id the escrow contract assigned. Never null on a `201` — it cannot
+            be known before the transaction confirms, which is why this call is slow.
+        definitionHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]+$'
+          description: |
+            keccak256 of the canonical definition, `0x`-prefixed hex, so the seller
+            can check the commitment against the chain without asking the API.
+        active:
+          type: boolean
+          description: |
+            Always `true` — a new agent is live and the request body cannot set this.
+
+    CreateVersionResponse:
+      type: object
+      description: |
+        The `201` body of `POST /agents/{id}/versions`. There is no
+        `onchainAgentId`: the agent is already registered, so this publishes an
+        update rather than minting a new chain id.
+
+        Submitting an identical definition again is accepted and returns a **new**
+        `id` and `version` carrying the **same** `definitionHash` — the hash is over
+        the definition, not over the submission.
+      required:
+        - id
+        - agentId
+        - version
+        - definitionHash
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: |
+            The new **version** id. This is the one catalogue response whose `id` is
+            a version id rather than an agent id; the agent id is alongside it as
+            `agentId`.
+        agentId:
+          type: string
+          format: uuid
+          description: The agent this version belongs to.
+        version:
+          type: integer
+          description: |
+            Previous version number + 1. Existing versions are never updated or
+            deleted, and a running order keeps pointing at the version it opened
+            against.
+        definitionHash:
+          type: string
+          pattern: '^0x[a-fA-F0-9]+$'
+          description: keccak256 of the canonical definition, `0x`-prefixed hex.
+
+    SetActiveRequest:
+      type: object
+      description: |
+        The body of `PATCH /agents/{id}/active`. An **absolute value, never a toggle
+        instruction** — that is what makes the call idempotent and safe to retry
+        blind, which matters because the seller's list polls underneath the switch.
+      required:
+        - active
+      additionalProperties: true
+      x-unknown-properties: |
+        Verified against the running API: unknown properties are accepted and silently
+        stripped, not rejected — a request carrying an extra key returns 200, not 400.
+        Documented open because that is what happens, not because extra keys are useful.
+      properties:
+        active:
+          type: boolean
+          description: |
+            The availability the agent should have after the call. Must be a JSON
+            boolean; the string `"false"` is a `400`, not a `false`.
+
+    SetActiveResponse:
+      type: object
+      description: |
+        The `200` body of `PATCH /agents/{id}/active` — a confirmation rather than a
+        discovery, since the request carried an absolute value.
+      required:
+        - id
+        - active
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The agent id.
+        active:
+          type: boolean
+          description: |
+            The state now in force, both on-chain and in the database. Switching an
+            agent off blocks **new** purchases only; orders already running are
+            untouched.
+
+    CreateOrderRequest:
+      type: object
+      description: >-
+        The whole of a purchase. Note what a buyer cannot send: there is no
+        `priceMinor`, no `reviewWindowSeconds` and no buyer id. The price is
+        snapshotted server-side from the agent version being charged against,
+        the review window comes from backend configuration, and the caller is
+        always the buyer.
+      required:
+        - agentId
+        - input
+        - acceptanceCriteria
+      properties:
+        agentId:
+          type: string
+          format: uuid
+          description: >-
+            The **agent's** id, not a version's. The server resolves the agent's
+            latest version at checkout and pins it onto the order, so a seller
+            republishing after this call does not change what was bought.
+        input:
+          type: object
+          additionalProperties: true
+          description: >-
+            The buyer's input for the run. Any JSON object; the real validation
+            is done server-side against the pinned version's `inputSchema`, so a
+            structurally valid object can still be rejected with a 400 naming
+            `input`.
+        acceptanceCriteria:
+          type: string
+          minLength: 1
+          description: >-
+            Free prose describing what a good delivery would be. Trimmed before
+            storage; whitespace-only is a 400. This is one half of the standard a
+            later dispute is judged against (the seller's declared capabilities
+            and exclusions are the other half). It is deliberately NOT matched
+            against the listing at purchase time — a mismatch is judged at
+            dispute time instead.
+      example:
+        agentId: 8f2b1c6e-0f4a-4a8e-9d2b-1c6e0f4a4a8e
+        input:
+          wordCap: 60
+          document: The board approved a price rise of 12% effective in March.
+        acceptanceCriteria: Under 60 words and it must mention the price rise.
+
+    CreateOrderResponse:
+      type: object
+      description: >-
+        The id of the order that was created. The order is left in `purchased`;
+        the agent has not run yet. Poll `GET /orders/{id}` to follow it.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+
+    OrderAcknowledgement:
+      type: object
+      description: >-
+        Returned with `202` by accept and complain. The id is the whole body —
+        there is nothing else worth reading, because on-chain settlement is still
+        in flight when this returns. Re-read `GET /orders/{id}` for the new state.
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          format: uuid
+
+    BuyerOrderSummary:
+      type: object
+      description: A row in the buyer's own order list.
+      required:
+        - id
+        - agentName
+        - priceMinor
+        - state
+        - createdAt
+        - deliveredAt
+        - disputedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        agentName:
+          type: string
+          description: >-
+            The name of the agent version that was pinned at purchase, not
+            necessarily the agent's current name.
+        priceMinor:
+          type: integer
+          format: int64
+          description: US cents. The price snapshotted at purchase.
+        state:
+          $ref: '#/components/schemas/OrderState'
+        createdAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            When the agent's run finished and the output was recorded. `null`
+            until then, and `null` forever if the run never delivered.
+        disputedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the buyer complained. `null` if no complaint was filed.
+
+    SaleResponse:
+      type: object
+      description: >-
+        A row in the seller's sales list — orders placed against agents this
+        account owns. ⚠️ Deliberately **narrower than `BuyerOrderSummary`: there
+        is no `deliveredAt` field here at all**, not merely a null one. A seller
+        list must not be rendered with buyer-list code that reads it.
+      required:
+        - id
+        - agentName
+        - priceMinor
+        - state
+        - createdAt
+        - disputedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        agentName:
+          type: string
+        priceMinor:
+          type: integer
+          format: int64
+          description: US cents. The gross price of the sale, before any refund.
+        state:
+          $ref: '#/components/schemas/OrderState'
+        createdAt:
+          type: string
+          format: date-time
+        disputedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the buyer complained. `null` if no complaint was filed.
+
+    OrderRunResponse:
+      type: object
+      description: The agent's run for this order — what went in and what came out.
+      required:
+        - input
+        - output
+      properties:
+        input:
+          type: object
+          additionalProperties: true
+          description: >-
+            The input the buyer submitted at purchase, exactly as stored. The
+            shape is whatever the seller's declared `inputSchema` accepts.
+        output:
+          type: [object, 'null']
+          additionalProperties: true
+          description: >-
+            What the agent produced. The shape is unconstrained JSON — whatever
+            the seller's declared `outputSchema` produced — so do not assume any
+            particular keys.
+
+
+            ⚠️ **`null` means the agent produced nothing, and that null IS THE
+            EVIDENCE of non-delivery.** It is not an error, not a placeholder and
+            not "loading". A client must never normalise it away to `{}` or drop
+            the key: the absence of an output is precisely what a dispute is
+            decided on. Render it as "nothing was delivered".
+
+    OrderResponse:
+      type: object
+      description: >-
+        One order in full. This is the read the order screen polls; it is the
+        authority on the order's current state.
+      required:
+        - id
+        - state
+        - agentName
+        - priceMinor
+        - acceptanceCriteria
+        - reviewWindowSeconds
+        - createdAt
+        - deliveredAt
+        - disputedAt
+        - settledAt
+        - run
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          $ref: '#/components/schemas/OrderState'
+        agentName:
+          type: string
+          description: The name of the agent version pinned at purchase.
+        priceMinor:
+          type: integer
+          format: int64
+          description: US cents. The price snapshotted at purchase.
+        acceptanceCriteria:
+          type: string
+          description: The buyer's own words, as submitted at purchase.
+        reviewWindowSeconds:
+          type: integer
+          description: >-
+            How long, measured from `deliveredAt`, the buyer has to accept or
+            complain. After it elapses the order auto-settles in the seller's
+            favour and complaining returns 409.
+        createdAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the run finished. `null` before delivery.
+        disputedAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the buyer complained. `null` if never disputed.
+        settledAt:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            When the money finally moved (acceptance, auto-settlement, or a
+            verdict). `null` while the order is still open.
+        run:
+          description: >-
+            The agent's run. `null` while the order is still in `purchased` and
+            the agent has not been executed yet.
+          oneOf:
+            - $ref: '#/components/schemas/OrderRunResponse'
+            - type: 'null'
+
+    CaseFileStepResponse:
+      type: object
+      description: >-
+        One redacted step of the agent's execution: what it did and how long it
+        took, with no reasoning text.
+      required:
+        - label
+        - summary
+        - durationMs
+        - error
+      properties:
+        label:
+          type: string
+          description: What ran — a model id such as `claude-haiku-4-5`, a tool name, or `output`.
+        summary:
+          type: [string, 'null']
+          description: >-
+            A one-line, non-revealing description of the step (e.g. "The agent
+            reasoned about the task"). `null` when no summary was recorded.
+        durationMs:
+          type: [integer, 'null']
+          description: Wall-clock duration of the step in milliseconds. `null` if not measured.
+        error:
+          type: [string, 'null']
+          description: The error this step failed with. `null` when the step succeeded.
+
+    BuyerCaseFileResponse:
+      type: object
+      description: >-
+        The evidence a buyer is shown for an order: what was asked for, what the
+        seller promised, and what came back. Answers for an order in **any**
+        state — a `purchased` order returns `output: null`, which is content, not
+        an error.
+      required:
+        - input
+        - acceptanceCriteria
+        - capabilities
+        - exclusions
+        - output
+        - steps
+      properties:
+        input:
+          type: object
+          additionalProperties: true
+          description: The input the buyer submitted at purchase.
+        acceptanceCriteria:
+          type: string
+          description: The buyer's own words, as submitted at purchase.
+        capabilities:
+          type: array
+          description: What the pinned agent version promised it does.
+          items:
+            type: string
+        exclusions:
+          type: array
+          description: What the pinned agent version explicitly promised it does NOT do.
+          items:
+            type: string
+        output:
+          type: [object, 'null']
+          additionalProperties: true
+          description: >-
+            What the agent produced. Unconstrained JSON — the shape is whatever
+            the seller's declared `outputSchema` produced.
+
+
+            ⚠️ **`null` means the agent produced nothing, and that null IS THE
+            EVIDENCE of non-delivery.** Not an error, not a placeholder. Never
+            normalise it to `{}` or drop the key.
+        steps:
+          type: array
+          description: |
+            ⚠️ **DO NOT ADOPT — known divergence, documented rather than fixed.**
+
+            **Always `[]` for a buyer — an empty array, in every response, always.** The
+            query that serves a buyer deliberately does not select the run's step column,
+            so the agent's reasoning never enters the process on a buyer's read. Only
+            `SellerCaseFileResponse` carries populated steps.
+
+            The design (`api-design.md` §1.3, `ui-design.md` §7.1) says a buyer **is**
+            shown a summarised trace, so this is a defect in the implementation and not a
+            behaviour to build against. It is recorded as row 5 of
+            `openapi-divergences.md`, where the reason it was left unfixed — it touches the
+            seller-IP boundary — is set out in full.
+
+            Until it is resolved: do not build a trace, timeline or progress view on this
+            field for a buyer. It will render blank.
+          x-divergence: 'api-wrong, not fixed — see openapi-divergences.md row 5'
+          items:
+            $ref: '#/components/schemas/CaseFileStepResponse'
+
+    SellerCaseFileResponse:
+      description: >-
+        The seller's view of the case file: everything the buyer sees, plus the
+        two fields that only the owner of the agent may read — the system prompt
+        and the unredacted execution trace. Unlike the buyer's shape, `steps`
+        here is populated.
+      allOf:
+        - $ref: '#/components/schemas/BuyerCaseFileResponse'
+        - type: object
+          required:
+            - systemPrompt
+            - rawSteps
+          properties:
+            systemPrompt:
+              type: string
+              description: >-
+                The agent version's system prompt.
+
+
+                ⚠️ **Seller intellectual property. It MUST NEVER be shown to a
+                buyer, logged, echoed into an error message, or forwarded to any
+                other client.** It is present only because the caller has been
+                verified as the owner of the agent that ran; the buyer's variant
+                of this route never even selects it from the database. If you are
+                writing shared rendering code for both case-file shapes, this
+                field is the one that must be gated.
+            rawSteps:
+              type: array
+              description: >-
+                The unredacted execution trace, in order. Owner-only, for the
+                same reason as `systemPrompt` — it can contain the agent's
+                internal reasoning.
+              items:
+                type: object
+                required:
+                  - kind
+                  - label
+                  - reasoning
+                  - error
+                  - startedAt
+                  - durationMs
+                properties:
+                  kind:
+                    type: string
+                    description: The kind of step.
+                    enum:
+                      - tool_call
+                      - model_turn
+                      - output
+                      - error
+                  label:
+                    type: string
+                    description: What ran — a model id, a tool name, or `output`.
+                  reasoning:
+                    type: [string, 'null']
+                    description: >-
+                      The agent's raw reasoning for this step. `null` when none
+                      was captured.
+                  error:
+                    type: [string, 'null']
+                    description: The error this step failed with. `null` when it succeeded.
+                  startedAt:
+                    type: string
+                    format: date-time
+                  durationMs:
+                    type: [integer, 'null']
+                    description: Wall-clock duration in milliseconds. `null` if not measured.
+
+    ComplainRequest:
+      type: object
+      description: The buyer's dispute. The reason is handed to the auditor as-is.
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: >-
+            Why the delivery is unacceptable, in the buyer's own words. Trimmed
+            before storage; whitespace-only is a 400.
+      example:
+        reason: The summary omits the pricing change entirely.
+
+    CitationResponse:
+      type: object
+      description: >-
+        One passage the auditor relied on, and whether the delivery met it.
+      required:
+        - source
+        - quote
+        - met
+      properties:
+        source:
+          $ref: '#/components/schemas/CitationSource'
+        quote:
+          type: string
+          description: >-
+            The exact text quoted from the acceptance criteria or from the
+            listing's capabilities/exclusions.
+
+
+            ⚠️ **The field is named `quote`.** If you are reaching for `clause`,
+            that name does not exist on the wire and never has — `quote` is what
+            the API sends and what the design specifies.
+        met:
+          type: boolean
+          description: Whether the delivery satisfied this quoted passage.
+
+    VerdictResponse:
+      type: object
+      description: >-
+        The auditor's decision on a disputed order. Immutable once written;
+        there is no appeal and the seller has no right of reply.
+      required:
+        - tier
+        - refundMinor
+        - reasoning
+        - citations
+        - txHash
+        - model
+        - createdAt
+      properties:
+        tier:
+          $ref: '#/components/schemas/VerdictTier'
+        refundMinor:
+          type: integer
+          format: int64
+          description: >-
+            US cents actually refunded to the buyer — the money that moved, not a
+            percentage. `0` when the tier is `none`; the rest of the price is
+            released to the seller.
+        reasoning:
+          type: string
+          description: >-
+            The auditor's written explanation, in prose. Can run to several
+            paragraphs; render it as text, not as a single line.
+        citations:
+          type: array
+          description: The passages the auditor weighed, with a met/not-met flag on each.
+          items:
+            $ref: '#/components/schemas/CitationResponse'
+        txHash:
+          type: [string, 'null']
+          description: >-
+            The on-chain transaction that moved the money. `null` when
+            settlement has not been confirmed on chain (yet, or at all) — the
+            verdict itself is still final.
+        model:
+          type: string
+          description: The model that produced the verdict, e.g. `claude-opus-5`.
+        createdAt:
+          type: string
+          format: date-time
+          description: When the verdict was recorded.
+
+    InsufficientFundsResponse:
+      type: object
+      description: >-
+        `POST /orders` 402 body — the buyer's available balance is below the
+        price. ⚠️ Unlike `ErrorResponse` this carries **no `statusCode`** and no
+        `error` code; both figures are on the wire so the client can format the
+        shortfall and route straight into a top-up without a second request.
+      required:
+        - message
+        - availableBalanceMinor
+        - priceMinor
+      properties:
+        message:
+          type: string
+          example: available balance is 0 cents, price is 100 cents
+        availableBalanceMinor:
+          type: integer
+          format: int64
+          description: US cents. What the buyer can currently spend.
+        priceMinor:
+          type: integer
+          format: int64
+          description: US cents. What the purchase would have cost.
+
+    VerdictErrorResponse:
+      type: object
+      description: >-
+        The error body of `GET /orders/{id}/verdict`, and **only** of that route.
+
+
+        ⚠️ It is unlike every other error shape in this API: a bare machine code
+        under `error`, with **no `statusCode` and no `message`**. Do not feed it
+        to a generic error renderer that reads `message`, and do not branch on
+        the HTTP status alone — two different 404s live here and they mean
+        opposite things:
+
+
+        - `404` + `ORDER_NOT_FOUND` — the order does not exist, or it is not
+          yours. Terminal. Stop polling.
+
+        - `404` + `VERDICT_NOT_FOUND` — the order exists, you are a party to it,
+          and the audit simply has not finished. **Keep polling.**
+
+        - `409` + `AUDIT_FAILED` — terminal. The audit gave up after `attempts`
+          tries at `failedAt`; no verdict will ever appear for this order.
+
+
+        A client that treats every 404 as "gone" will abandon a dispute that was
+        still being judged.
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: The machine-readable outcome code. Branch on this, not on the status.
+          enum:
+            - ORDER_NOT_FOUND
+            - VERDICT_NOT_FOUND
+            - AUDIT_FAILED
+        attempts:
+          type: integer
+          description: >-
+            How many times the audit was attempted before it was abandoned.
+            Present only on `AUDIT_FAILED`.
+        failedAt:
+          type: string
+          format: date-time
+          description: >-
+            When the audit was abandoned. Present only on `AUDIT_FAILED`.
