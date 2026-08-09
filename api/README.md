@@ -109,8 +109,64 @@ docker compose logs api | grep -i placeholder
 
 Both must be empty before any chain or LLM path can work.
 
+## Schema
+
+Eight tables, three enum types, 20 indexes, four `CHECK` constraints — built by one
+hand-written migration, `src/migrations/*-InitialSchema.ts`.
+
+```
+accounts ──┬── ledger_entries              money in/out, append-only
+           ├── agents ── agent_versions    the catalogue
+           └── orders ──┬── runs           the evidence
+                        ├── complaints
+                        └── verdicts
+```
+
+| Enum type | Values |
+| --- | --- |
+| `ledger_kind` | `onramp`, `purchase`, `offramp`, `adjustment` |
+| `order_state` | `purchased`, `running`, `delivered`, `failed`, `released`, `disputed`, `adjudicated`, `settled` |
+| `verdict_tier` | `none`, `quarter`, `half`, `three_quarter`, `full` |
+
+Enum member order is significant — Postgres sorts by declaration order, so reordering
+changes the meaning of `ORDER BY state`.
+
+**The authoritative DDL is
+[`specs/002-entities-migrations/contracts/schema.sql`](./specs/002-entities-migrations/contracts/schema.sql).**
+The migration is transcribed from it; entities in `src/entities/` are written to
+match. If the three ever disagree, the contract wins.
+
+A few things in here are load-bearing and look like oversights if you don't know why:
+
+- **No cached balance column, anywhere.** A balance is `SUM(amount_minor)` over the
+  append-only ledger — see `src/ledger/balance.repository.ts`.
+- **`accounts.wallet_address` has no plain `UNIQUE`.** Uniqueness is the functional
+  index `lower(wallet_address)`, because a plain one is case-sensitive and would let
+  the same address register twice.
+- **`orders` references `agent_version_id`, never `agent_id`.** Adding an `agent_id`
+  column would be a defect.
+- **`runs.output` is nullable on purpose.** `NULL` is the non-delivery evidence.
+- **All money is `bigint` USD cents.** Token base units live only in the chain adapter.
+
+### Changing the schema
+
+```bash
+npm run migration:generate -- src/migrations/SomeName   # needs a path argument
+npm run migration:run
+npm run migration:revert
+```
+
+`migration:generate` against an in-sync schema must print **"No changes in database
+schema were found"**. If it generates a file, that is real drift — read it, fix the
+**entity**, and delete the file. Never apply a generated migration blind: entities
+declare every index, `CHECK`, unique, and foreign-key constraint *name* explicitly so
+this check stays trustworthy, and the first run before that was in place proposed
+dropping all four CHECKs and all five named indexes.
+
 ## Tests
 
-There are no automated tests in this component, by project decision.
-Verification is the manual script in
-[`specs/001-api-foundation/quickstart.md`](./specs/001-api-foundation/quickstart.md).
+There are no automated tests in this component, by project decision. Verification is
+the manual scripts in
+[`specs/001-api-foundation/quickstart.md`](./specs/001-api-foundation/quickstart.md)
+and
+[`specs/002-entities-migrations/quickstart.md`](./specs/002-entities-migrations/quickstart.md).

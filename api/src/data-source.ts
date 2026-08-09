@@ -2,6 +2,15 @@ import { resolve } from 'path';
 import * as dotenv from 'dotenv';
 import { DataSource, DataSourceOptions } from 'typeorm';
 
+import { Account } from './entities/account.entity';
+import { Agent } from './entities/agent.entity';
+import { AgentVersion } from './entities/agent-version.entity';
+import { Complaint } from './entities/complaint.entity';
+import { LedgerEntry } from './entities/ledger-entry.entity';
+import { Order } from './entities/order.entity';
+import { Run } from './entities/run.entity';
+import { Verdict } from './entities/verdict.entity';
+
 // The TypeORM CLI (`typeorm-ts-node-commonjs migration:run -d src/data-source.ts`)
 // boots this file directly with no NestJS lifecycle to load config first. Without
 // this call the CLI sees an undefined DATABASE_URL and reports what looks like a
@@ -35,7 +44,31 @@ export const dataSourceOptions: DataSourceOptions = {
   // Migrations are run by a dedicated one-shot `migrate` Compose service that must
   // exit 0 before the API starts; the app must never run them itself.
   migrationsRun: false,
-  entities: [__dirname + '/**/*.entity{.ts,.js}'],
+  // TypeORM emits `uuid_generate_v4()` (which needs the uuid-ossp extension) by
+  // default, and `gen_random_uuid()` only when this flag is set. The migration
+  // specifies gen_random_uuid(), so without this every entity's generated
+  // default disagrees with the schema and the drift check fails on all eight
+  // tables at once.
+  //
+  // The flag name is a leftover: NO extension is installed and none is needed.
+  // gen_random_uuid() has been core Postgres since v13 — verified against this
+  // project's Postgres 16, which has only plpgsql.
+  uuidExtension: 'pgcrypto',
+  // Explicit, not a glob. A glob is resolved at runtime against the compiled
+  // directory layout, which is exactly the kind of thing that works under
+  // ts-node and fails in dist/ — with a runtime EntityMetadataNotFound that
+  // reads like a dependency-injection problem. Listing them makes a missing
+  // entity a compile error, and makes "which entities exist" a one-file answer.
+  entities: [
+    Account,
+    Agent,
+    AgentVersion,
+    Complaint,
+    LedgerEntry,
+    Order,
+    Run,
+    Verdict,
+  ],
   migrations: [__dirname + '/migrations/*{.ts,.js}'],
   // Query logging is deliberately excluded because it prints parameter values.
   logging: ['error', 'warn'],
