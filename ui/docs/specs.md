@@ -2,8 +2,8 @@
 
 > How the frontend is split into speckit-sized specs.
 
-Eight specs, dependency-ordered — **the last one runs the product rather than
-building it.** Read [`CONTEXT.md`](./CONTEXT.md) first.
+Eight specs, dependency-ordered — **the last one makes the frontend match the API
+and writes down how a human checks it.** Read [`CONTEXT.md`](./CONTEXT.md) first.
 
 | # | Spec | Depends on | Size | Demo-critical |
 | --- | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ building it.** Read [`CONTEXT.md`](./CONTEXT.md) first.
 | UI-05 | Verdict card & case file | 04 | M | ✅ |
 | UI-06 | Wallet page | 02 | M | ✅ |
 | UI-07 | Seller pages | 02 | M | ○ |
-| UI-08 | Verification pass & contract reconciliation | 01–07, **API-12**, **+ a live API** | M | ✅ |
+| UI-08 | Contract reconciliation & the manual test plan | 01–07, **API-12**, **+ a running API** | M | ✅ |
 
 **Why UI-05 is separate from UI-04.** Order Detail is a state machine; the verdict
 card is a piece of argumentation. Splitting them means the card gets designed on its
@@ -198,9 +198,9 @@ seller's view should read as such rather than looking like a missing feature.
 **Source:** ui-design §3 Flow B, agent-definition §2, product-workflow §7.5.
 
 
-## UI-08 — Verification pass & contract reconciliation
+## UI-08 — Contract reconciliation & the manual test plan
 
-**Deliver:** the first time any of this is seen working.
+**Deliver:** a frontend that matches the API, and a script a human can run.
 
 UI-01…07 were built against **types describing an API that did not yet exist**. That
 is the right way to build in parallel and it has one failure mode, which has already
@@ -220,15 +220,19 @@ have surfaced as an empty checklist in Act 2, on stage.
   every state transition the API writes that the UI must render.
 - **Do not generate types from the contract** — several UI types encode guarantees by
   omission, and a faithful generator would delete them silently.
-- Render all eight pages against a seeded database, reached by clicking
-- **Run the three acts twice**, same verdicts both times
-- UI-05's carryovers: quickstart Parts B–F, 3m legibility, the greyscale check, long
-  clauses, the stranger test, and **T033** — delete `splitFor`'s subtraction if the
-  API sends `sellerMinor`
-- Check the redaction boundary in the **network response**, not the rendering
+- **`docs/manual-test-plan.md`** — the second deliverable, and the bigger one. A
+  script executable start to finish by someone who has not read the source: the three
+  acts, the seller flow, money, degradation, redaction, and the four checks only a
+  human can make (greyscale, 3m legibility, long clauses, the stranger test). One
+  unambiguous expected result per step; a pass/fail column; and the symptom named
+  wherever a failure is subtle
+- Carries UI-05's and UI-07's deferred items so nothing is lost
 
-**Done when** three acts run twice with identical verdicts, no page polls past a
-terminal state, and a buyer's case file carries no prompt text on the wire.
+**This spec does not run the tests.** It writes the plan; a human executes it.
+
+**Done when** the reconciliation note resolves every `api-wrong` row, no endpoint the
+UI calls is missing from the contract, and no step in the plan says "verify it looks
+correct".
 
 **Source:** ui-design, product-workflow §5.3/§5.5, CONTEXT §3, commit `67dcf4d`.
 
@@ -258,7 +262,7 @@ Run these through `/speckit-specify` **in order** — each assumes the ones abov
 | 5 | UI-05 — Verdict card | [`specs/UI-05-verdict-card.md`](./specs/UI-05-verdict-card.md) |
 | 6 | UI-06 — Wallet page | [`specs/UI-06-wallet-page.md`](./specs/UI-06-wallet-page.md) |
 | 7 | UI-07 — Seller pages | [`specs/UI-07-seller-pages.md`](./specs/UI-07-seller-pages.md) |
-| 8 | UI-08 — Verification pass | [`specs/UI-08-verification-pass.md`](./specs/UI-08-verification-pass.md) |
+| 8 | UI-08 — Reconciliation & test plan | [`specs/UI-08-reconciliation-and-test-plan.md`](./specs/UI-08-reconciliation-and-test-plan.md) |
 
 Each file is self-contained enough for one speckit run: goal, in/out of
 scope, acceptance criteria, and the specific traps for that slice.
