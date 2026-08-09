@@ -3128,6 +3128,171 @@ code {
   }
 }
 
+/* ---- Buyer: my orders ---- */
+
+/* The buyer's side of `.sell`, and deliberately built from its own class names
+   rather than by widening the `.sales__*` selectors to cover both. The two
+   lists carry different columns from different contract types — the seller's
+   row has no `deliveredAt` at all — and a shared selector is how one of them
+   quietly inherits a rule written for the other's shape. The duplication here
+   is a dozen lines and it keeps the two screens independently adjustable. */
+
+.my-orders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.my-orders__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.my-orders__title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.5rem;
+}
+
+.my-orders__lede {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--color-text-muted);
+}
+
+/* The way out of an empty list, kept beside the heading so it is reachable
+   without scrolling past the orders — the same placement argument `.sell__new`
+   makes for the seller. */
+.my-orders__browse {
+  flex: none;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  color: var(--color-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.my-orders__browse:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+/* Scrolls inside its own region so a long purchase history stays in its box.
+   Taller than the seller's 26rem because this is the only section on the page,
+   with nothing beneath it to be pushed out of reach. */
+.orders-list__scroll {
+  max-height: 34rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.orders-list__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.orders-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.orders-list__list > li:last-child .orders-list__row {
+  border-bottom: none;
+}
+
+/* `display: contents` so the anchor wraps the whole row for hit-testing while
+   the cells stay direct children of the grid — the trick `.sales__link` uses. */
+.orders-list__link {
+  display: contents;
+  color: inherit;
+  text-decoration: none;
+}
+
+.orders-list__link:hover .orders-list__agent {
+  color: var(--color-accent);
+}
+
+.orders-list__agent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-list__amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.orders-list__state,
+.orders-list__time {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* An order waiting on the buyer is the reason this page exists — it is the one
+   row they must not scroll past. The left rule survives greyscale and the words
+   beside it are what actually carry the meaning, which is the rule every marked
+   row in this stylesheet follows. */
+.orders-list__row--review {
+  border-left: 3px solid var(--color-accent);
+}
+
+/* Both flags drop to their own line under the agent name rather than claiming a
+   fifth column. Written out rather than left to grid auto-placement, which
+   happens to produce the same result today: a reserved fifth column would leave
+   a dead gap on every row that is neither awaiting review nor disputed, which is
+   most of them, and the mark would shrink to fit beside the timestamp on exactly
+   the rows where it most needs to be read. `1 / -1` also survives someone adding
+   a column to `.orders-list__row` — auto-placement would silently tuck the flag
+   into the new one. */
+.orders-list__flag-review,
+.orders-list__flag-disputed {
+  grid-column: 1 / -1;
+}
+
+.orders-list__flag-review {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.orders-list__row--disputed {
+  border-left: 3px solid var(--color-warning);
+}
+
+.orders-list__flag-disputed {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-warning);
+  white-space: nowrap;
+}
+
+.orders-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.orders-list__empty-link {
+  color: var(--color-accent);
+}
+
 /* ---- Seller: home (my agents, my sales) ---- */
 
 .sell {
@@ -3666,7 +3831,8 @@ code {
 
 @media (max-width: 40rem) {
   .owned-agents__row,
-  .sales__row {
+  .sales__row,
+  .orders-list__row {
     grid-template-columns: minmax(0, 1fr);
   }
 

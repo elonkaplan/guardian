@@ -190,11 +190,26 @@ Do it separately.
 
 | | Step | Expect | ✓ |
 |---|---|---|---|
-| 2.5.1 | Click **My Orders** in the navigation | A page titled "My Orders" showing a **placeholder**, not a list of your orders | ☐ |
+| 2.5.1 | Click **My Orders** in the navigation | A page titled "My Orders" listing the orders you have placed, newest first — agent name, amount, state, and time on each row | ☐ |
+| 2.5.2 | Find the order you bought in §2.2 | It is in the list, at or near the top | ☐ |
+| 2.5.3 | Read its state word | The same word the order detail header showed — "Working", "Delivered", "Released", and so on. Never a second vocabulary | ☐ |
+| 2.5.4 | If any order is sitting at **Delivered** | Its row is marked **NEEDS YOUR REVIEW** with a rule down its left edge | ☐ |
+| 2.5.5 | If you have run the dispute act | That order's row is marked **DISPUTED**, and *stays* marked after Guardian rules and the order settles | ☐ |
+| 2.5.6 | Leave the page open on a live order and wait ~10 s | The row's state word changes on its own, without a refresh (5 s poll) | ☐ |
+| 2.5.7 | Click any row | The order detail screen for that order opens | ☐ |
 
-> **This placeholder is the expected result, not a failure.** The page was never built — all
-> three acts run on the order detail screen, reached from the purchase flow. Tick the box and
-> move on. It is listed here only so you do not spend twenty minutes reporting it.
+> **This page was a placeholder until 2026-08-09** and earlier drafts of this plan recorded the
+> placeholder as the expected result. It is now built and reads `GET /orders`. If you are
+> holding an older printout, 2.5.1 there is stale — a placeholder is now a **failure**.
+
+> ⚠ **2.5.5 is the one worth being fussy about.** The disputed mark is keyed on the
+> `disputedAt` timestamp, not on the state being `disputed`. If the mark disappears once the
+> order reaches "Ruled" or "Settled", that is a real regression and not a display nicety — it
+> means the row went back to reading the state.
+
+> **No countdown on this page, by design.** `GET /orders` does not carry each order's review
+> window, so the list says review is *owed* and the order's own screen runs the clock. A timer
+> appearing here would be counting down from a number nobody was sold under — report it.
 
 ---
 

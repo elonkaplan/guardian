@@ -1,5 +1,12 @@
+import { unwrapList } from '../lib/listEnvelope';
 import { apiGet, apiPost } from './client';
-import type { ComplainRequest, CreateOrderRequest, CreateOrderResponse, Order } from './types';
+import type {
+  BuyerOrderSummary,
+  ComplainRequest,
+  CreateOrderRequest,
+  CreateOrderResponse,
+  Order,
+} from './types';
 
 /**
  * Orders: the purchase, the read the order screen follows, and the two actions
@@ -48,12 +55,36 @@ export function createOrder(request: CreateOrderRequest): Promise<CreateOrderRes
 }
 
 /**
+ * `GET /orders` — every order this account bought, newest first. The buyer's
+ * side of `fetchSales`.
+ *
+ * Shape-tolerant, and note that this sits ten lines above a docblock arguing
+ * that `fetchOrder` should not be. Both are the same rule applied to two
+ * different failures, not an inconsistency: a list is the asymmetric case, where
+ * an envelope misread as an array yields `[]` and the page faithfully reports
+ * "No orders yet" — a plausible, silent, wrong success that looks exactly like a
+ * new account. A resource read that misses a field renders a blank cell, which
+ * is loud. Only the failure that lies convincingly earns the defensive branch,
+ * which is why `fetchAgents` and `fetchSales` unwrap and `fetchOrder` does not.
+ *
+ * The contract says a bare array with no envelope, so on a correct backend the
+ * first branch of `unwrapList` is the only one that ever runs.
+ *
+ * `BuyerOrderSummary`, never `Order` and never `Sale` — see the type for why
+ * three views of one resource is the correct number.
+ */
+export async function listOrders(): Promise<BuyerOrderSummary[]> {
+  const payload = await apiGet<unknown>('/orders');
+  return unwrapList<BuyerOrderSummary>(payload, ['orders', 'items', 'data']);
+}
+
+/**
  * `GET /orders/:id` — the read the order screen polls.
  *
- * No shape tolerance, deliberately. `fetchAgents` in `./agents.ts` unwraps a
- * possible list envelope, and that is the only such branch in the API layer;
- * it is not a precedent to follow here, because the two failures are not the
- * same kind of failure.
+ * No shape tolerance, deliberately. The two list reads in this API layer —
+ * `fetchAgents`, and `listOrders` directly above — unwrap a possible envelope,
+ * and neither is a precedent to follow here, because the two failures are not
+ * the same kind of failure.
  *
  * There, an envelope misread as an array yields an empty array, and the
  * marketplace faithfully reports that as "no agents are listed yet" — a

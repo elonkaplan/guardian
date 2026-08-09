@@ -36,7 +36,7 @@ changes.
 | Other defects fixed | 1 (R-03) |
 | `api-wrong`, escalated | 1 (R-04) — since fixed in `api/` |
 | Diverging on purpose, recorded | 5 |
-| Orphan endpoints named | 6 |
+| Orphan endpoints named | 6 at the time of the pass — **5 now**, `GET /orders` closed 2026-08-09 (R-07) |
 | Latent risk recorded, not fixed | 1 (R-12) |
 | Checked and agreeing | R-11, nine categories |
 
@@ -50,7 +50,7 @@ changes.
 | **R-04** | `GET /orders/{id}/case-file` → `steps`, buyer view | Contract documented a summarised trace; the API returned `steps: []` **unconditionally** for a buyer. The seller's copy of the same order carried the real trace | **Row 5, `api-wrong`** — the only defect the report found; now `FIXED` | **escalated → fixed in `api/` 2026-08-09** | See in full below. The escalation was decided *fix it*; the frontend's interim copy has been withdrawn along with the bug |
 | R-05 | `POST /withdraw` → `WithdrawResponse` | Contract requires `[txHash, amountMinor, explorerUrl]` with `txHash` **non-nullable**. Frontend declares only `txHash: string \| null` | Not a row | **no-change** | Three separate answers — see below |
 | R-06 | `GET /me` → `accountId` | Contract sends it; frontend does not declare it | Not a row | **ignored-with-reason** | Nothing in the app renders an account id (verified: zero matches for `accountId` in `src/`). `GET /auth/session` is the documented way to learn it |
-| R-07 | `GET /orders` | Defined by the contract; **no frontend module calls it**. `MyOrdersPage` is a four-line placeholder | Not a row | **named-orphan** | Building the page is out of scope. All three demo acts run on the order detail screen. The test plan makes the placeholder an *expected* result so it is not reported as a failure |
+| R-07 | `GET /orders` | Was: defined by the contract with **no frontend module calling it**, `MyOrdersPage` a four-line placeholder. **Closed 2026-08-09 — the page is built and the endpoint has a caller** | Not a row | ~~named-orphan~~ → **fixed-frontend** | Originally closed as out of scope: all three demo acts run on the order detail screen, so the test plan made the placeholder an *expected* result rather than a failure. It was then built anyway. `listOrders` in `src/api/orders.ts` reads it into `BuyerOrderSummary` — the contract's own type, kept distinct from both `Order` and `Sale` because `SaleResponse` deliberately lacks `deliveredAt` and must not be rendered by buyer-list code. `useOrders` polls at 5s, the cadence `CONTEXT.md` §Updates had already reserved for this page. Test 2.5.1 now expects the list |
 | R-08 | `GET /orders/{id}/verdict` → `model` | Contract sends it; frontend does not declare it | Not a row | **ignored-with-reason** | Rendering the model name pushes the card back toward "an AI decided this" — the one thing the citation checklist exists to prevent |
 | R-09 | `GET /agents/{id}` → `version` | Contract sends it; frontend does not declare it | Not a row | **ignored-with-reason** | Nothing renders a version number, and an order pins its own version server-side |
 | R-10 | `/onramp/routes`, `/offramp/routes`, both `/agents/{id}/versions` | Defined by the contract; no page reaches them | Not a row | **named-orphan** | See *Orphan endpoints* below. One of them is an orphan **by design** |
@@ -178,12 +178,16 @@ Noted here because a mechanical diff of the two shapes will flag it.
 
 ## Orphan endpoints
 
-Six paths the contract defines that no page reaches. The spec permits one by name; the rest are
+Five paths the contract defines that no page reaches. The spec permits one by name; the rest are
 listed here because an unnamed orphan is indistinguishable from an oversight.
+
+`GET /orders` was the sixth and is no longer one: My Orders was built on 2026-08-09 and calls it
+(R-07). The row is struck through rather than deleted so that a reader of an earlier draft can
+tell a closed orphan from a forgotten one.
 
 | Path | Why unreached |
 |---|---|
-| `GET /orders` | My Orders is a placeholder (R-07). The demo path is the order detail screen |
+| ~~`GET /orders`~~ | ~~My Orders is a placeholder (R-07)~~ — **no longer an orphan.** `useOrders` → `listOrders` polls it at 5s behind `/orders` |
 | `POST /onramp/routes` | Rain is stubbed; no on-ramp route UI. Out of scope per `CONTEXT.md` §5 |
 | `POST /offramp/routes` | Same. **This is the one the spec permits by name** (api-design §4) |
 | `GET /agents/{id}/versions` | **Orphan by design.** It carries `systemPrompt`, `model`, and `timeoutSeconds`. This app deliberately never calls it — the guarantee holds on the wire, not only in the type |

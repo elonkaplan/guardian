@@ -324,6 +324,51 @@ export interface Order {
 }
 
 /**
+ * A row in the buyer's own order list — `GET /orders`, the seven fields
+ * `BuyerOrderSummary` declares in the OpenAPI contract and no more.
+ *
+ * **Not `Order`, and not `Sale`.** Three types for one resource family looks
+ * like duplication until you notice that each is a different party's view of it
+ * and the differences are load-bearing:
+ *
+ * - `Order` is the whole thing — criteria, review window, the embedded run. It
+ *   is what the order screen polls at 1s and what the buyer accepts or disputes.
+ *   Reusing it here would declare fields `GET /orders` never sends, and a
+ *   declared-but-absent field is exactly the thing that renders blank.
+ * - `Sale` is the *seller's* row, and the contract flags the trap in writing:
+ *   *"Deliberately narrower than `BuyerOrderSummary`: there is no `deliveredAt`
+ *   field here at all, not merely a null one. A seller list must not be rendered
+ *   with buyer-list code that reads it."* The two lists therefore get two types
+ *   and two components, so that sharing one by accident is a compile error
+ *   rather than a column that is silently always empty on one side.
+ *
+ * No `reviewWindowSeconds`, which is the field a countdown would need. That
+ * absence is the contract's, not an omission here, and it is why the list marks
+ * a delivered order as awaiting review without saying how long is left: the only
+ * honest clock is on the order's own screen, one click away, where the field
+ * exists. Inventing a default window to count down from here would put a number
+ * on screen that no order was actually sold under.
+ *
+ * `disputedAt` is carried as a fact rather than inferred from `state`, for the
+ * reason spelled out on `Sale` and in `ConcludedFace`: it stays true through
+ * every state after the complaint, so a state added later in the lifecycle
+ * cannot silently strip the mark off a row that earned it.
+ */
+export interface BuyerOrderSummary {
+  /** The order id, and what `/orders/:id` is keyed on. */
+  id: string;
+  /** The agent version's name as pinned at purchase — not the agent's name now. */
+  agentName: string;
+  priceMinor: Cents;
+  state: OrderState;
+  createdAt: string;
+  /** When the run finished. `null` until then, and `null` forever if it never delivered. */
+  deliveredAt: string | null;
+  /** When the buyer complained. `null` if no complaint was filed. */
+  disputedAt: string | null;
+}
+
+/**
  * `POST /orders/:id/complain` (api-design §3.4), verbatim: a reason and nothing
  * else. Accept has no body at all, which is why it has no request type here.
  *
