@@ -43,6 +43,29 @@
  * an unbounded approval says nothing about whether the operator's account
  * actually holds enough of the token to move. Either one can be short while
  * the other is fine, and each fails with its own distinct error above.
+ *
+ * ---
+ *
+ * Why `transfer` is here, and why that is a bigger deal than one more entry:
+ *
+ * **Neither funding leg touches the escrow contract at all.** A top-up is
+ * `USDC.transfer(operator, amount)` signed by the FUNDER — the funder wallet is
+ * "the outside world", the only source of money in the system
+ * (`docs/rain-integration.md` §0.2). A cash-out is the mirror image,
+ * `USDC.transfer(funder, amount)` signed by the OPERATOR (§0.3). The escrow has
+ * no function for either, and adding one would be an `sc/` redeploy
+ * (specs/005-accounts-ledger-funding/research.md R4).
+ *
+ * So this file — not `escrow-operator.abi.ts` — is what both directions of the
+ * platform's money movement go through. Both directions are the *same* call
+ * with the same shape and the same cost; only the signing client and the
+ * recipient differ, which is why `TokenTransferService` has two methods over
+ * one ABI entry and one `GAS_LIMITS.transfer` ceiling.
+ *
+ * `transferFrom` is deliberately absent: the sender is the signer in both
+ * directions, so an allowance step would be a second transaction for no
+ * benefit. If it is ever added, it needs its own measured gas ceiling — it is
+ * a different cost, not the same one.
  */
 export const erc20Abi = [
   {
@@ -78,6 +101,18 @@ export const erc20Abi = [
     inputs: [],
     outputs: [{ name: '', type: 'uint8', internalType: 'uint8' }],
     stateMutability: 'view',
+  },
+  // -- The only write the funding flows make. Signed by the funder on a --
+  // -- top-up and by the operator on a cash-out; one entry, two callers. --
+  {
+    type: 'function',
+    name: 'transfer',
+    inputs: [
+      { name: 'to', type: 'address', internalType: 'address' },
+      { name: 'value', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'bool', internalType: 'bool' }],
+    stateMutability: 'nonpayable',
   },
   // -- Errors bubbled through SafeERC20 from the token, not the escrow. --
   // -- See the header comment: these are load-bearing, not optional. --

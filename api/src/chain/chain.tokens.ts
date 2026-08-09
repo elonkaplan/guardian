@@ -1,5 +1,5 @@
 /**
- * Injection tokens for the three viem clients.
+ * Injection tokens for the four viem clients.
  *
  * In their own file rather than in `chain.module.ts` to break a real import
  * cycle: the module imports each service so it can provide it, and each service
@@ -25,3 +25,19 @@ export const OPERATOR_CLIENT = Symbol('OPERATOR_CLIENT');
 
 /** Signs with `GUARDIAN_PRIVATE_KEY`. Paired with `escrowResolveAbi` — one function. */
 export const GUARDIAN_CLIENT = Symbol('GUARDIAN_CLIENT');
+
+/**
+ * Signs with `FUNDER_PRIVATE_KEY`. Paired with `erc20Abi` — it never touches
+ * the escrow contract at all, only `USDC.transfer` into the operator pool.
+ *
+ * The funder wallet is "the outside world" (`docs/rain-integration.md` §0.2):
+ * the only source of money in the system, standing in for the bank now that
+ * Rain's onramp is stubbed.
+ *
+ * ⚠️ Like the other three, this provider is **never exported** from
+ * `ChainModule`. The funding module reaches it through `TokenTransferService`'s
+ * two named methods and cannot reach it any other way — which is what stops a
+ * key whose whole purpose is "move USDC" from also being able to name
+ * `approve` on the token, or any function on any other ABI (FR-005).
+ */
+export const FUNDER_CLIENT = Symbol('FUNDER_CLIENT');

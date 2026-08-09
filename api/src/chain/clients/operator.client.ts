@@ -16,13 +16,16 @@ import { buildMonadChain, type ChainConfig } from '../monad-chain';
  *
  * ⚠️ **`nonceManager` is not optional here.**
  *
- * The operator has two independent senders: the purchase saga, which writes
- * when a buyer acts, and the sweeper cron, which polls every few seconds and
- * writes whenever a review window has lapsed. With viem's default behaviour
- * each write independently fetches the pending nonce, so two writes that
- * overlap in time fetch the *same* nonce — and the second replaces the first in
- * the mempool. One transaction silently disappears, and at this layer every
- * transaction moves money.
+ * The operator has three independent senders: the purchase saga, which writes
+ * when a buyer acts; the sweeper cron, which polls every few seconds and writes
+ * whenever a review window has lapsed; and — since 005 — the cash-out leg
+ * (`TokenTransferService.transferToFunder`), which writes whenever a user moves
+ * money back out. That third one is user-triggered rather than ours, so the
+ * overlap it creates is not something we schedule. With viem's default
+ * behaviour each write independently fetches the pending nonce, so two writes
+ * that overlap in time fetch the *same* nonce — and the second replaces the
+ * first in the mempool. One transaction silently disappears, and at this layer
+ * every transaction moves money.
  *
  * `nonceManager` keeps an in-process counter per account and hands out distinct
  * nonces. Note what this does and does not buy: it makes overlap harmless

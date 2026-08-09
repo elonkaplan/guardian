@@ -82,6 +82,46 @@ export const GAS_LIMITS = {
    */
   approve: 110_000n,
 
+  /**
+   * MEASURED 83,436 via `measureGas` (×1.32), both directions identical.
+   *
+   * ⚠️ **This entry is the third time reasoning from storage costs was wrong in
+   * this table, and the second time the estimate sat BELOW the measurement.**
+   * The seeded figure was 65,000, built from the usual arithmetic — 21,000 base
+   * + 20,000 cold recipient SSTORE + 2,900 warm sender SSTORE + ~1,750
+   * `Transfer` event + ~2,000 OZ dispatch ≈ 47,650, ×1.36 → 65,000. The real
+   * warm-path cost is **83,436**, roughly 1.75× the reasoned worst case. Ship
+   * the 65,000 and every top-up and every cash-out reverts out-of-gas — with
+   * the full 65,000 charged anyway, because Monad bills the LIMIT — in the two
+   * flows that are the only way money enters or leaves the platform.
+   *
+   * The gap is not a rounding error, and the arithmetic above is not obviously
+   * wrong; it is simply that OpenZeppelin's `ERC20._update` (plus the token's
+   * own dispatch, calldata cost, and access-list warming behaviour on this
+   * chain) costs far more than the ~2,000 "overhead" line pretends. That is the
+   * general lesson `openDeal` and `approve` already teach and this entry
+   * reconfirms: the arithmetic is a sanity check, never the ceiling.
+   *
+   * Measured with `scripts/measure-transfer-gas.ts`, which sends nothing —
+   * `eth_estimateGas` only. Re-runnable at any time: unlike the ESTIMATED
+   * entries below, a transfer needs no special chain state.
+   *
+   * ⚠️ Both readings were **warm** — the funder and the operator each already
+   * held USDC, so both recipient slots were non-zero. A first-ever transfer to
+   * a fresh recipient pays a cold zero → non-zero SSTORE, roughly 17,000 more,
+   * which this 1.32× margin does NOT cover. Fine as it stands, because these
+   * flows only ever move USDC between two long-lived wallets — but if a third
+   * recipient is added, re-measure against it rather than assuming this holds.
+   * That is the exact shape of the `approve` mistake documented above.
+   *
+   * **One entry, not one per direction.** Top-up (funder → operator) and
+   * cash-out (operator → funder) measured *identically*, to the gas: same call,
+   * same cost, only the signer and the recipient differ. The short signer is
+   * already named by `InsufficientFundsError.address`, so a second
+   * identical-valued entry would buy nothing and be a thing that drifts.
+   */
+  transfer: 110_000n,
+
   // ---- ESTIMATED — need a live deal in the right state to measure ----
 
   /** ESTIMATED: 2 SSTOREs + event, same shape as `markDelivered`. */
