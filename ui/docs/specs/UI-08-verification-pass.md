@@ -1,7 +1,7 @@
 # UI-08 — Verification pass & contract reconciliation
 
-**Component:** `ui/` · **Depends on:** UI-01…07 **and a live API that can complete a
-purchase** · **Size:** Medium
+**Component:** `ui/` · **Depends on:** UI-01…07, **`docs/openapi.yaml`**, and **a live
+API that can complete a purchase** · **Size:** Medium
 
 > ⚠️ **This is the only spec that runs the product.** Everything before it was
 > written, typechecked, and built — none of it has been rendered in a browser or
@@ -35,20 +35,70 @@ ledger rows, the agent listing. Assume at least one more disagreement exists.
 
 ## In scope
 
-### 1. Reconcile every boundary against real responses
+### 1. Reconcile every boundary — three ways
 
-For **each** type in `src/api/types.ts`, compare against what the API actually
-returns — not against the spec, against the wire.
+`docs/openapi.yaml` is the **contract**: the prescriptive description of every
+endpoint, written from `docs/api-design.md`. Reconciliation is a **three-way** check,
+and which side is wrong depends on where the disagreement is:
 
-- Field **names**, not just shapes. This is the class of bug above.
-- Nullability: a field the UI treats as always-present that arrives `null`
-- Money: every figure in **minor units**, and the two-numbers rule intact
-- Casing: `snake_case` vs `camelCase` at the boundary, decided once
-- Any field the UI reads that the API does not send, and vice versa
+| Compare | A disagreement means |
+| --- | --- |
+| `src/api/types.ts` ↔ `openapi.yaml` | **The UI is wrong.** Fix it here. |
+| `openapi.yaml` ↔ what the API actually returns | **The API is wrong** — or the contract is. Escalate; do not paper over it in the client. |
+| `openapi.yaml` ↔ `docs/api-design.md` | **The contract drifted from the design.** The design decides. |
 
-**Deliverable: a short reconciliation note** listing every disagreement found and how
-it was resolved. If the list is empty, say so explicitly — an empty list that was
-looked for is worth something; an empty list nobody produced is worth nothing.
+Check all of it, per endpoint and per type:
+
+- **Field names.** The bug class above. Compare strings, not shapes.
+- **Enum members, exhaustively** — `OrderState` (8), `LedgerKind` (4),
+  `CitationSource` (3), tier values. A value the API can emit and the UI cannot
+  render is a page with no face; the UI's exhaustive switches turn it into a **thrown
+  error**, not a graceful degrade.
+- **Nullability**, in both directions — a field the UI treats as always-present that
+  arrives `null`, and one it defends against that never is.
+- **Money**: every figure in minor units, `Minor` suffix, two-numbers rule intact,
+  and `settledFundsMinor` nullable.
+- **Casing** — `snake_case` vs `camelCase`, decided once, applied everywhere.
+- **Status codes and error shapes**, including which failures are retryable. UI-04
+  and UI-05 both treat 404/403 as fatal and everything else as transient; confirm the
+  API agrees about which is which.
+- **Auth per endpoint.** API-04's guard is **global and fail-closed**, so an endpoint
+  the UI believes is public and the API guards returns 401 on a page with no sign-in
+  prompt. Check `@Public()` coverage against every unauthenticated call the UI makes.
+- **Seller-authorised reads.** `GET /orders/:id`, `/case-file`, and `/verdict` are
+  buyer *or* agent owner (api-design §3.4). Verify as a **seller account**, not only
+  as a buyer — the narrow check passes every buyer-side test and kills half of UI-07.
+
+**Deliverable: a written reconciliation note** — one row per disagreement, which of
+the three comparisons found it, which side was wrong, and how it was resolved. If a
+comparison found nothing, say so explicitly. An empty list somebody produced is
+evidence; an empty list nobody produced is not.
+
+### 1b. Find the decoupled surface, not just the mismatched fields
+
+Field-level agreement is not integration. Enumerate both directions:
+
+- **Endpoints the UI calls that the contract does not define.** Each is a 404 waiting
+  for the page that calls it.
+- **Endpoints the contract defines that no page reaches.** `api-design.md` §4 already
+  states the intended answer — everything is reachable except `/offramp/routes`. Any
+  *other* orphan is either a missing UI affordance or dead backend work; name which.
+- **Query parameters and their semantics**, not just their names — `GET
+  /agents?owner=me` must include **inactive** agents, or UI-07's availability toggle
+  is one-way (api-design §3.3).
+- **Polling cadences against what the endpoint can bear**: Order Detail 1s, Wallet /
+  My Orders / `/sell` 5s. `GET /me` now does a chain read; confirm 5s is survivable.
+- **Flows that span both sides**: purchase → execution → delivery → complaint →
+  verdict → settlement. Walk each transition and confirm the state the API writes is
+  a state the UI renders.
+
+> **Do not generate types from `openapi.yaml` to "fix" this.** Several UI types
+> encode guarantees **by omission** — `AgentListing` has no `systemPrompt`, `CaseFile`
+> has no `prompt` or `raw`, `PurchaseRequest` has no `price` or `reviewWindowSeconds`.
+> Those absences *are* invariants #3 and FR-021, enforced by shape rather than
+> discipline. A generator faithfully reproducing an API that sends one more field
+> would silently delete the guarantee while every test still passed. Reconcile by
+> hand; keep the omissions and the docblocks that explain them.
 
 ### 2. Render every page against real data
 
@@ -108,7 +158,11 @@ because it fails at the distance the demo is watched from.
 ## Acceptance
 
 - All three acts run end to end, **twice**, producing the same verdicts
-- The reconciliation note exists and every disagreement in it is resolved
+- The reconciliation note exists, covers **all three comparisons**, and every
+  disagreement in it is resolved or escalated with an owner
+- **No endpoint the UI calls is absent from `docs/openapi.yaml`**, and every endpoint
+  it defines is either reached by a page or named as a deliberate orphan
+- Every enum the UI switches on has the **same members** as the contract
 - No console errors on any of the eight pages
 - No page polls after reaching a terminal state (watch the network tab — a laptop
   hammering an endpoint for a finished order is a needless way to look bad)
@@ -118,11 +172,16 @@ because it fails at the distance the demo is watched from.
 ## Watch out for
 
 - **Field names are the bug class.** Shapes agreeing is not contracts agreeing. Read
-  the actual JSON.
-- **Do not "fix" the API from here.** A disagreement found at this boundary may be
-  the API's to change, not the UI's — the specs and `docs/tech-stack.md` §5 decide
-  which side is wrong. `67dcf4d` moved the UI *and* corrected a stale root doc; both
-  were needed.
+  the actual JSON, and compare it to the contract rather than to memory.
+- **A contract is not a passing test.** `openapi.yaml` says what *should* happen. Only
+  the running API says what does. A UI that matches the contract perfectly and the
+  server not at all is exactly as broken as one that matches neither — which is why
+  the second of the three comparisons is not optional.
+- **Do not "fix" the API from here.** A disagreement may be the API's to change, not
+  the UI's — `api-design.md` and `tech-stack.md` §5 decide which side is wrong.
+  `67dcf4d` moved the UI *and* corrected a stale root doc; both were needed.
+- **Absences are load-bearing.** See the generator warning above. Anything that adds
+  a field to a UI type needs a reason beyond "the API sends it."
 - **A green rehearsal on a fast local machine hides timing bugs.** The countdown, the
   1s poll, and the sweeper interact. Run at least one rehearsal without a warm cache.
 - **Resist rebuilding.** At this point in the schedule the temptation on seeing a

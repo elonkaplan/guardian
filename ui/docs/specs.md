@@ -209,8 +209,16 @@ Shapes agreed, names did not, and nothing caught it — the raw fields are optio
 `unknown` by design, so a wrong name is an absent value, not a type error. It would
 have surfaced as an empty checklist in Act 2, on stage.
 
-- **Reconcile every boundary against real JSON** — names, not just shapes. Produce a
-  written note of what disagreed, even if that note says "nothing".
+- **Reconcile three ways** against `docs/openapi.yaml`: UI types ↔ contract (the UI is
+  wrong), contract ↔ running API (the API or the contract is wrong — escalate), and
+  contract ↔ `api-design.md` (the design decides). Names, enum members, nullability,
+  status codes, and **auth per endpoint** — API-04's guard is global and fail-closed.
+  Produce a written note of what disagreed, even if it says "nothing".
+- **Find the decoupled surface**: endpoints the UI calls that the contract omits,
+  endpoints nothing reaches, query semantics (`?owner=me` must include inactive), and
+  every state transition the API writes that the UI must render.
+- **Do not generate types from the contract** — several UI types encode guarantees by
+  omission, and a faithful generator would delete them silently.
 - Render all eight pages against a seeded database, reached by clicking
 - **Run the three acts twice**, same verdicts both times
 - UI-05's carryovers: quickstart Parts B–F, 3m legibility, the greyscale check, long
