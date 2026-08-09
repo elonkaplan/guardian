@@ -60,3 +60,5 @@ Appeals, multi-round arbitration, human review, reputation effects.
 
 `../../../docs/product-workflow.md` §4.1–§4.3, §7.4 · `../../../docs/tech-stack.md`
 §3, §5.
+
+**Build against [`../../../docs/openapi.yaml`](../../../docs/openapi.yaml)** (API-12) — it is the contract the frontend reconciles against, and a divergence here is a defect there.

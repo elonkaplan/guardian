@@ -48,3 +48,5 @@ poller.
 ## Source
 
 `../../../docs/api-design.md` §6 · `../../../docs/smart-contract.md` §6.3.
+
+**Build against [`../../../docs/openapi.yaml`](../../../docs/openapi.yaml)** (API-12) — it is the contract the frontend reconciles against, and a divergence here is a defect there.

@@ -78,3 +78,5 @@ is in the demo** with a human buyer; only the machine-buyer framing is cut.
 ## Source
 
 `../../../docs/product-workflow.md` §5 · `../../../docs/agent-definition.md` §6.
+
+**Build against [`../../../docs/openapi.yaml`](../../../docs/openapi.yaml)** (API-12) — it is the contract the frontend reconciles against, and a divergence here is a defect there.

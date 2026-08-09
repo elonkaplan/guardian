@@ -68,3 +68,5 @@ Running the agent (API-08), auditing (API-09), the cron jobs (API-10).
 ## Source
 
 `../../../docs/api-design.md` §4 · `../../../docs/product-workflow.md` §2.
+
+**Build against [`../../../docs/openapi.yaml`](../../../docs/openapi.yaml)** (API-12) — it is the contract the frontend reconciles against, and a divergence here is a defect there.

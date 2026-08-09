@@ -53,3 +53,5 @@ Orders, execution, search, pagination, ratings.
 ## Source
 
 `../../../docs/agent-definition.md` §2 · `../../../docs/api-design.md` §1.3, §3.3.
+
+**Build against [`../../../docs/openapi.yaml`](../../../docs/openapi.yaml)** (API-12) — it is the contract the frontend reconciles against, and a divergence here is a defect there.
