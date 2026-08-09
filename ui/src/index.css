@@ -421,13 +421,24 @@ code {
   outline-offset: 2px;
 }
 
+/*
+  Diagnostic, not an alert. It answers "is the API up?" for whoever is about to
+  rehearse — it should never compete with a message about something the user
+  just tried to do, so the .status box is stripped back to a line of text.
+*/
+
 .connect__health {
   margin: var(--space-8) 0 0;
   color: var(--color-text-muted);
 }
 
 .connect__health .status {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
   font-size: 0.8rem;
+  opacity: 0.75;
 }
 
 /* ---- Fatal boot error (config failure) ---- */

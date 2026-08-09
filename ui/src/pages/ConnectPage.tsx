@@ -136,7 +136,12 @@ export function ConnectPage() {
         </p>
       ) : null}
 
-      <p className="connect__health">
+      {/*
+        Suppressed while a failure is showing. A failed sign-in against a dead
+        backend would otherwise print the same fact twice, and two alerts of
+        equal weight saying one thing is how a user stops reading either.
+      */}
+      <p className="connect__health" hidden={failure !== null}>
         {health === null ? (
           <span className="status status--pending">Checking {config.apiUrl}…</span>
         ) : health.reachable ? (
