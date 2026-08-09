@@ -155,7 +155,7 @@ so nothing here re-converts — invariant #2 holds.
 | `GET` | `/agents` | public | Active listings **only** |
 | `GET` | `/agents?owner=me` | owner | **Includes inactive.** Without this the availability toggle is one-way — deactivating an agent removes it from the owner's own list and it can never be switched back on |
 | `GET` | `/agents/:id` | public | **Listing fields only** — never the execution spec |
-| `POST` | `/agents` | seller | Creates agent + version 1, hashes the definition, calls `registerAgent` |
+| `POST` | `/agents` | seller | Creates agent + version 1, hashes the definition, calls `registerAgent` — **awaits the receipt**, returns with `onchain_agent_id` set |
 | `POST` | `/agents/:id/versions` | owner | New immutable version, calls `updateAgent` |
 | `PATCH` | `/agents/:id/active` | owner | Calls `setAgentActive` |
 | `GET` | `/agents/:id/versions` | owner | Own definitions, execution spec included |
@@ -163,6 +163,22 @@ so nothing here re-converts — invariant #2 holds.
 Same path, two shapes: `GET /agents/:id` is public and listing-only; the owner's
 view is a separate route. Making them different **routes** rather than one route
 with a branch means there is no conditional to get wrong.
+
+**`POST /agents` is synchronous, and it has to be.** `registerAgent` *returns* the
+`agentId` — the contract assigns it (`nextAgentId++`), so we cannot know it before
+the receipt, and `openDeal(agentId, …)` cannot reference the agent without it.
+Returning early would list an agent nobody can buy. Sub-second finality makes the
+wait cheap.
+
+`agents.onchain_agent_id` is nullable anyway, but that `NULL` is a **crash state**,
+not the normal path (database-schema §1.4): the row is written, the transaction is in
+flight, the process dies. Which forces the rule that is easy to miss —
+
+> **`GET /agents` must exclude `onchain_agent_id IS NULL`.** Otherwise one failed
+> registration parks an unbuyable agent in the marketplace, and it fails at
+> *purchase* time, on the buyer's screen, for reasons the buyer cannot act on. The
+> owner's `?owner=me` list should still show it, marked as not yet listed — the
+> seller is the one who can do something about it.
 
 ### 3.4 Orders
 

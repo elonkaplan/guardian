@@ -13,7 +13,8 @@ spec depends on gets built once, here.
 ## In scope
 
 - `POST /agents` — creates agent + version 1, canonicalises and hashes the
-  definition, calls `registerAgent`
+  definition, calls `registerAgent` and **awaits the receipt**, returning with
+  `onchain_agent_id` set
 - `POST /agents/:id/versions` — new immutable version, calls `updateAgent`
 - `PATCH /agents/:id/active`
 - `GET /agents`, `GET /agents/:id` — **public listing fields only**, active agents only
@@ -41,6 +42,13 @@ Orders, execution, search, pagination, ratings.
   it the hash won't reproduce and the on-chain commitment is decorative.
 - **Public and owner views are separate routes**, not one route with a branch. No
   conditional to get wrong.
+- **`POST /agents` cannot return early.** `registerAgent` *returns* the `agentId` —
+  the contract assigns it — and `openDeal` needs it, so an early return lists an
+  agent nobody can buy. `onchain_agent_id IS NULL` is a crash state
+  (database-schema §1.4), not an async contract, which means **`GET /agents` must
+  filter it out**: one failed registration would otherwise park an unbuyable agent
+  in the marketplace that fails at purchase time, on the buyer's screen. Keep it
+  visible on `?owner=me`, marked not-yet-listed — the seller can act on it.
 - **`?owner=me` must include inactive agents.** The public list is active-only, and
   reusing that filter for the owner's list makes the availability toggle **one-way**:
   deactivating an agent removes it from its own owner's list and nothing can switch
