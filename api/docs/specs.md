@@ -19,7 +19,7 @@ next**, because a contract written after the fact prevents nothing. Read
 | API-09 | Guardian audit engine | 07, 08 | **L — the product** |
 | API-10 | Cron jobs | 07 | S |
 | API-11 | Demo seed & the three seller agents | 06, 08 | M |
-| API-12 | **OpenAPI contract & Swagger UI** | 01 — **build before 06** | S |
+| API-12 | **OpenAPI contract & Swagger UI** | 01–11 — **runs last, feeds UI-08** | S |
 
 **Why this shape.** The split follows dependencies, not module boundaries — each
 spec ends at a point where something is *verifiable by hand*. API-03 lands a real
@@ -318,11 +318,15 @@ same verdicts.
 
 **Deliver:** one document both components build against, and a URL to read it at.
 
-**Numbered last, built next.** A contract that describes what was already built
-prevents nothing; written before API-06…11 it constrains them.
+**Runs last on this side, immediately before UI-08** — it is the handoff between the
+two components.
 
 - `docs/openapi.yaml` — every endpoint, auth rule, request/response schema and error
-  shape, **hand-written from api-design §3**
+  shape, **written from the running implementation**: what the code actually returns,
+  captured from real responses rather than transcribed from DTOs
+- `docs/openapi-divergences.md` — the code diffed against api-design §3, each row
+  marked `api-wrong` / `design-stale` / `intentional`. **`api-wrong` rows get the API
+  fixed**, or flagged so UI-08 does not adopt them
 - Served at `GET /docs` via `SwaggerModule.setup()`, loading the YAML from disk —
   `@nestjs/swagger` for the UI only, **no DTO decorators**
 - The four enums the UI switches on, spelled out: `OrderState` (8), `LedgerKind` (4),
@@ -330,18 +334,22 @@ prevents nothing; written before API-06…11 it constrains them.
 - Money field names verbatim, `settledFundsMinor` nullable-not-optional
 - `camelCase` on the wire, recorded once so it stops being an assumption
 
-**Write it from the design, never from the code.** A generated document is
-descriptive; this one has to be prescriptive, and that property is lost the moment
-anyone regenerates it. Equally: this spec writes a document and serves it — it does
-not change a single endpoint's behaviour.
+**The implementation is the source of truth for the document — not for whether the
+document is right.** Collapsing those two is the one way this spec does damage: a
+field the API named wrongly becomes a contract, and UI-08 reconciles the frontend
+into matching a bug. That is `67dcf4d` exactly. The divergence report is what keeps
+the two questions apart.
 
 `GET /docs` must be `@Public()`, or the global fail-closed guard puts the contract
 behind a login.
 
-**Done when** the YAML parses as OpenAPI 3.1, every endpoint in api-design §3.1–3.5
-appears with matching path/method/auth, and `/docs` renders in a browser.
+**Done when** the YAML parses as OpenAPI 3.1, every route the app registers appears
+in it and vice versa, response schemas match real captured responses field for field,
+`/docs` renders in a browser, and the divergence report exists — even if it says
+"none".
 
-**Source:** api-design §3, database-schema §8, tech-stack §5, `ui/src/api/types.ts`.
+**Source:** the running implementation first; then api-design §3, database-schema §8,
+tech-stack §5 for the divergence report.
 
 
 ## No automated tests in this component

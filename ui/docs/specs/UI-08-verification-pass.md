@@ -1,7 +1,8 @@
 # UI-08 — Verification pass & contract reconciliation
 
-**Component:** `ui/` · **Depends on:** UI-01…07, **`docs/openapi.yaml`**, and **a live
-API that can complete a purchase** · **Size:** Medium
+**Component:** `ui/` · **Depends on:** UI-01…07, **API-12** (`docs/openapi.yaml` +
+`docs/openapi-divergences.md`), and **a live API that can complete a purchase** ·
+**Size:** Medium
 
 > ⚠️ **This is the only spec that runs the product.** Everything before it was
 > written, typechecked, and built — none of it has been rendered in a browser or
@@ -35,17 +36,29 @@ ledger rows, the agent listing. Assume at least one more disagreement exists.
 
 ## In scope
 
-### 1. Reconcile every boundary — three ways
+### 1. Reconcile every boundary against the contract
 
-`docs/openapi.yaml` is the **contract**: the prescriptive description of every
-endpoint, written from `docs/api-design.md`. Reconciliation is a **three-way** check,
-and which side is wrong depends on where the disagreement is:
+**Read `docs/openapi-divergences.md` before `docs/openapi.yaml`.** The order matters.
 
-| Compare | A disagreement means |
+API-12 writes the contract **from the running implementation**, so `openapi.yaml`
+describes what the API genuinely does — which makes it the right thing for this
+frontend to match, and the wrong thing to trust blindly. A field the API named
+incorrectly is in there too, described faithfully. The divergence report is where
+API-12 diffed the code against `api-design.md` and recorded which is which.
+
+| The row says | Then |
 | --- | --- |
-| `src/api/types.ts` ↔ `openapi.yaml` | **The UI is wrong.** Fix it here. |
-| `openapi.yaml` ↔ what the API actually returns | **The API is wrong** — or the contract is. Escalate; do not paper over it in the client. |
-| `openapi.yaml` ↔ `docs/api-design.md` | **The contract drifted from the design.** The design decides. |
+| *(not in the report)* | **The contract is correct. The UI matches it** — fix the UI. |
+| `api-wrong` | **Do not match it.** The API is the defect; the design is right. Escalate, and if it cannot be fixed in time, record what the UI does about it. |
+| `design-stale` | The contract is correct and `api-design.md` has been updated to agree. Match it. |
+| `intentional` | Match it, and read the recorded reason — it usually implies something for the UI. |
+
+> **Why this is not paranoia.** `67dcf4d` was a field the UI called `clause` and the
+> API sends `quote`. A contract generated from the API at that moment would have
+> documented `quote` and this pass would have renamed the UI to match — correct by
+> luck, since the API happened to be right. Had the mistake been the API's, the same
+> mechanism would have propagated it into the frontend and closed the ticket. The
+> divergence report is the only thing that tells those two cases apart.
 
 Check all of it, per endpoint and per type:
 
@@ -69,10 +82,12 @@ Check all of it, per endpoint and per type:
   buyer *or* agent owner (api-design §3.4). Verify as a **seller account**, not only
   as a buyer — the narrow check passes every buyer-side test and kills half of UI-07.
 
-**Deliverable: a written reconciliation note** — one row per disagreement, which of
-the three comparisons found it, which side was wrong, and how it was resolved. If a
-comparison found nothing, say so explicitly. An empty list somebody produced is
-evidence; an empty list nobody produced is not.
+**Deliverable: a written reconciliation note** — one row per disagreement: what
+differed, whether the divergence report says the API is at fault, and how it was
+resolved. **Every `api-wrong` row from API-12 must appear here** with what the UI
+did about it, even if the answer is "nothing, escalated". If a category was checked
+and found clean, say so explicitly — an empty list somebody produced is evidence, an
+empty list nobody produced is not.
 
 ### 1b. Find the decoupled surface, not just the mismatched fields
 
@@ -173,13 +188,13 @@ because it fails at the distance the demo is watched from.
 
 - **Field names are the bug class.** Shapes agreeing is not contracts agreeing. Read
   the actual JSON, and compare it to the contract rather than to memory.
-- **A contract is not a passing test.** `openapi.yaml` says what *should* happen. Only
-  the running API says what does. A UI that matches the contract perfectly and the
-  server not at all is exactly as broken as one that matches neither — which is why
-  the second of the three comparisons is not optional.
-- **Do not "fix" the API from here.** A disagreement may be the API's to change, not
-  the UI's — `api-design.md` and `tech-stack.md` §5 decide which side is wrong.
-  `67dcf4d` moved the UI *and* corrected a stale root doc; both were needed.
+- **A faithful contract is not a correct one.** `openapi.yaml` documents what the API
+  does, bugs included. Matching it is usually right and occasionally the wrong move —
+  `docs/openapi-divergences.md` is what tells you which, and it is the first file to
+  read, not the last.
+- **Do not "fix" the API from here**, but do not absorb its defects either. An
+  `api-wrong` row is escalated, not worked around in the client. `67dcf4d` moved the
+  UI *and* corrected a stale root doc; both were needed.
 - **Absences are load-bearing.** See the generator warning above. Anything that adds
   a field to a UI type needs a reason beyond "the API sends it."
 - **A green rehearsal on a fast local machine hides timing bugs.** The countdown, the
