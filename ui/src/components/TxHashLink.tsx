@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
 
 import type { OrderState } from '../api/types';
-import { explorerTxUrl } from '../chain/chains';
-import { isTxHash, truncateHash } from '../lib/verdict';
+import { isTxHash } from '../lib/verdict';
+import { ExplorerTxLink } from './ExplorerTxLink';
 
 interface TxHashLinkProps {
   /**
@@ -43,7 +43,8 @@ const COPIED_MS = 2000;
  * check, at the moment they went to check, and it converts "here is the proof"
  * into "the proof 404s". So this component would rather print a string and say it
  * cannot vouch for it than emit an `href` it has not validated. Three rules fall
- * out of that, and they are the whole component:
+ * out of that. They used to be the whole component; see below for where they
+ * live now:
  *
  * 1. **A link is emitted only for something hash-shaped** (`isTxHash`, FR-018,
  *    research R9). A malformed value renders as text, marked unrecognisable. A
@@ -66,6 +67,16 @@ const COPIED_MS = 2000;
  * `rel="noopener noreferrer"`: mid-demo, navigating the order screen away from
  * the order is a hole the presenter has to climb back out of, and the explorer
  * has no business holding a handle on our window.
+ *
+ * The three rules above — link only what's hash-shaped, no dead control, the URL
+ * from `explorerTxUrl` alone — no longer live in this file. They moved to
+ * `ExplorerTxLink` (research R15) when the wallet page's withdrawal receipt
+ * needed the same validated anchor, and re-typing them a second time here was
+ * exactly the drift `chain/chains.ts` warns against. What stays here is
+ * everything specific to this card: the two missing-hash sentences, which need
+ * `state` and have no equivalent on a withdrawal receipt, and the copy button,
+ * which exists because a sceptic checking this hash is doing so elsewhere —
+ * a withdrawal receipt is a confirmation the person already believes.
  *
  * The one `useState` this feature is allowed lives here (data-model §5), for the
  * two-second "Copied" acknowledgement and nothing else.
@@ -127,34 +138,6 @@ export function TxHashLink({ txHash, state }: TxHashLinkProps): JSX.Element {
     );
   }
 
-  if (!isTxHash(txHash)) {
-    /*
-     * Something is in the column, but it is not 32 bytes of hex. The value is
-     * shown — it is the only trace of the settlement anyone has, and deleting
-     * evidence because it is malformed is the wrong instinct on this screen —
-     * but it is shown as text with a caveat, and no `href` is built from it.
-     * Linking it would produce the precise failure this component exists to
-     * avoid: an authoritative-looking link that a sceptic clicks and that lands
-     * on an explorer 404 (FR-018, research R9).
-     */
-    return (
-      <div className="tx-hash">
-        <span className="tx-hash__label">Settlement transaction</span>
-        <span className="tx-hash__value">{txHash}</span>
-        <span className="tx-hash__malformed">
-          This is not a recognisable transaction reference, so it has not been linked to
-          the explorer.
-        </span>
-      </div>
-    );
-  }
-
-  // `isTxHash` narrowed `txHash` to viem's `Hex`, which is what `explorerTxUrl`
-  // asks for. The type is doing the same job as the sentence above it: the URL
-  // builder is unreachable from an unvalidated string.
-  const href = explorerTxUrl(txHash);
-  const shortHash = truncateHash(txHash);
-
   const handleCopy = (): void => {
     const clipboard = navigator.clipboard;
     if (!clipboard) {
@@ -185,39 +168,45 @@ export function TxHashLink({ txHash, state }: TxHashLinkProps): JSX.Element {
   return (
     <div className="tx-hash">
       <span className="tx-hash__label">Settlement transaction</span>
-      <a
-        className="tx-hash__link"
-        href={href}
-        // FR-017. The new tab is the requirement; `noopener noreferrer` is the
-        // price of a `target="_blank"` that hands a window handle to a third
-        // party.
-        target="_blank"
-        rel="noopener noreferrer"
-        // The full hash, for anyone who wants to read it without copying it —
-        // and the reason truncation costs nothing.
-        title={txHash}
-        // The destination is announced rather than hidden in a visually-hidden
-        // span, so the arrow beside it can stay purely decorative. The name
-        // opens with the visible text, so what is read matches what is seen.
-        aria-label={`Transaction ${shortHash}, opens on MonadVision`}
-      >
-        <span className="tx-hash__value">{shortHash}</span>
-        <span className="tx-hash__external" aria-hidden="true">
-          ↗
-        </span>
-      </a>
-      <button type="button" className="tx-hash__copy" onClick={handleCopy}>
-        Copy full hash
-      </button>
       {/*
-       * Mounted unconditionally and filled on copy. A live region that appears
-       * at the same moment its text does is frequently not announced at all;
-       * one that is already in the tree announces the change. Empty the rest of
-       * the time, so it says nothing when there is nothing to say.
+       * The validate-truncate-link-or-caveat core lives in `ExplorerTxLink`
+       * now (research R15). `label` is left unset — its default of
+       * "Transaction" reproduces this card's own `aria-label` exactly, and
+       * naming that here a second time would be the re-typing the extraction
+       * exists to avoid.
        */}
-      <span className="tx-hash__copied" role="status">
-        {copied ? 'Copied' : ''}
-      </span>
+      <ExplorerTxLink hash={txHash} />
+      {/*
+       * The copy control belongs to a hash worth copying, which is why this is
+       * gated rather than rendered alongside every present value. `isTxHash` is
+       * consulted here for a second, different reason than `ExplorerTxLink`
+       * consults it: there, it decides whether an `href` may be built at all;
+       * here, it decides whether offering to put this string on someone's
+       * clipboard is a service or a trap. A malformed reference is shown —
+       * deleting the only trace of a settlement because it is ragged is the
+       * wrong instinct on this card — but it is shown as evidence, not handed
+       * over as something to paste into an explorer that will reject it.
+       *
+       * This is also parity with what UI-05 shipped: the malformed branch never
+       * had a copy button, and the R15 extraction was meant to move the anchor,
+       * not to change what the verdict card does.
+       */}
+      {isTxHash(txHash) ? (
+        <>
+          <button type="button" className="tx-hash__copy" onClick={handleCopy}>
+            Copy full hash
+          </button>
+          {/*
+           * Mounted unconditionally and filled on copy. A live region that appears
+           * at the same moment its text does is frequently not announced at all;
+           * one that is already in the tree announces the change. Empty the rest of
+           * the time, so it says nothing when there is nothing to say.
+           */}
+          <span className="tx-hash__copied" role="status">
+            {copied ? 'Copied' : ''}
+          </span>
+        </>
+      ) : null}
     </div>
   );
 }

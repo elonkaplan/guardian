@@ -2745,3 +2745,385 @@ code {
   grid-template-columns: minmax(0, 1fr);
   max-width: 40rem;
 }
+
+/* ==========================================================================
+   Wallet (UI-06)
+
+   Three money figures, two exits, and a statement. The layout's one real job
+   is the thing the spec keeps returning to: the figures must never read as a
+   single quantity, and they must stay visible while the statement is scrolled.
+   Everything below serves one of those two ends.
+   ========================================================================== */
+
+.wallet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  max-width: 68rem;
+}
+
+.wallet__heading {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+/* --------------------------------------------------------- The three figures */
+
+/*
+  Equal columns, visibly separated, and never a fourth cell holding a total.
+  The gap and the borders are doing argumentative work rather than decorative:
+  three figures in a row with no separation read as a sum waiting to happen,
+  which is the exact misreading the whole feature exists to prevent.
+*/
+.money-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-4);
+}
+
+.money-figures__figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.money-figures__label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+/*
+  Large, tabular, and monospaced. Tabular figures stop the amount from shifting
+  width as it counts up during a top-up, and the size is set for the back of a
+  demo room on a projector rather than for a desk (SC-011).
+*/
+.money-figures__amount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+/*
+  Unknown, not zero. Muted rather than coloured, because the distinction has to
+  survive a greyscale screenshot — the em dash itself is the signal, and the
+  note beneath it carries the meaning in words (FR-008, quickstart G10).
+*/
+.money-figures__amount--unknown {
+  color: var(--color-text-muted);
+}
+
+.money-figures__note {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.money-figures__stale-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------- The two exits */
+
+.wallet-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.wallet-action {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.wallet-action__heading {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+/*
+  The line that says which money this control moves and where it goes. Not
+  small print: it is what stops the two exits being mistaken for each other,
+  which is a mistake measured in real money (FR-025).
+*/
+.wallet-action__what {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.wallet-action__what strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.wallet-action__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.wallet-action__submit {
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-bg);
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.wallet-action__submit:disabled {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/*
+  Three different things a panel can say, and they are deliberately not one
+  style. "Unavailable" is the system working and telling you why; a refusal is
+  the backend saying no; silence is the one case where we do not know what
+  happened, and it is the only one that gets a warning's weight.
+*/
+.wallet-action__unavailable {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.wallet-action__refusal {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.wallet-action__silence {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.wallet-action__pending {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/*
+  The provenance line — six words that answer the question a judge would
+  otherwise ask out loud. Given a rule and its own space rather than being set
+  as a caption, because being read is the entire requirement (FR-013, SC-007).
+*/
+.wallet-action__provenance {
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+.wallet-action__receipt {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------- Amount fields */
+
+.amount-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.amount-field__label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/*
+  The `$` sits inside the field's own border rather than beside it, so the
+  control reads as one input. It is decorative and `aria-hidden`: `parseUsd`
+  accepts a typed symbol too, so nobody is punished for adding a second one.
+*/
+.amount-field__control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.amount-field__control:focus-within {
+  border-color: var(--color-accent);
+}
+
+.amount-field__prefix {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.amount-field__input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3) 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1rem;
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.amount-field__input:disabled {
+  color: var(--color-text-muted);
+}
+
+.amount-field__error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-danger);
+}
+
+/* ---------------------------------------------------------------- Statement */
+
+.ledger {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ledger__heading {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+/*
+  The sentence that stops a missing withdrawal row reading as broken books.
+  Styled as a standing note rather than a warning: it explains a boundary in
+  the system, and there is nothing wrong (FR-019, database-schema §3.3).
+*/
+.ledger__scope-note {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-text-muted);
+}
+
+/*
+  The statement scrolls inside itself so the three figures stay on screen while
+  history is read (FR-022). A page-level scroll would push them off the top,
+  which is the one arrangement that makes the statement harder to check against
+  the balance it explains.
+*/
+.ledger__scroll {
+  max-height: 26rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.ledger__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ledger__row {
+  display: grid;
+  grid-template-columns: 9rem 6rem 1fr auto;
+  gap: var(--space-3);
+  align-items: baseline;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ledger__row:last-child {
+  border-bottom: none;
+}
+
+/*
+  Sign first, in tabular figures, so a column of amounts lines up on the decimal
+  point and a debit is identifiable from its leading character alone. The colour
+  is a second channel, never the only one — the word beside it is what survives
+  a greyscale screenshot and a colour-blind reader (quickstart G10).
+*/
+.ledger__amount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ledger__amount--credit {
+  color: var(--color-positive);
+}
+
+.ledger__amount--debit {
+  color: var(--color-text);
+}
+
+.ledger__direction-word {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.ledger__kind {
+  min-width: 0;
+}
+
+.ledger__order-link {
+  color: var(--color-accent);
+}
+
+.ledger__time {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* One column below a laptop's width; the grid above assumes a demo screen. */
+@media (max-width: 40rem) {
+  .ledger__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+
+  .ledger__time {
+    white-space: normal;
+  }
+}

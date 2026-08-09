@@ -44,6 +44,23 @@ export interface AccountSummaryResult {
   data: AccountSummary | undefined;
   /** True when there is no usable figure — not signed in, still loading, or errored. */
   unknown: boolean;
+  /**
+   * The most recent failure, or `null`. Exposed alongside `data` rather than
+   * folded into `unknown`, because the two callers want opposite things from
+   * the same situation.
+   *
+   * After one good read and one failed refresh, `data` still holds perfectly
+   * good figures from five seconds ago while `error` is set. `BuyPanel` wants
+   * that collapsed — it only asks whether the number can be trusted for an
+   * affordability check, and a stale one cannot. The wallet screen wants them
+   * apart: blanking three money figures because a single refresh blipped is the
+   * screen breaking itself, so it keeps the last known amounts on display and
+   * marks them as not refreshed (UI-06 FR-007).
+   *
+   * `unknown` therefore keeps its exact previous meaning and every existing
+   * caller is unaffected. This field is additive.
+   */
+  error: ApiError | null;
 }
 
 export function useAccountSummary(): AccountSummaryResult {
@@ -75,5 +92,6 @@ export function useAccountSummary(): AccountSummaryResult {
   return {
     data: query.data,
     unknown,
+    error: query.error ?? null,
   };
 }

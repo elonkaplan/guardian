@@ -18,9 +18,24 @@ import type { Cents } from '../lib/money';
  * via cash-out; escrowed money is locked on-chain until an order settles.
  * A single combined number would be wrong in both directions.
  *
- * Not here: *settled* funds (the on-chain `balances[]` a user withdraws to
- * their own wallet). Those are the Wallet page's concern in UI-06, read from a
- * different source.
+ * `settledFundsMinor` joins them in UI-06 — the on-chain `balances[]` a user
+ * withdraws to their own wallet. It arrives on this same read rather than from
+ * a chain call in the browser: the backend does the `eth_call`, which is the
+ * demonstration of `ui/docs/CONTEXT.md` §2's boundary rather than the exception
+ * to it.
+ *
+ * **`null` means unknown. It never means zero.** The other two figures come
+ * from Postgres in the same transaction as the account; this one comes from an
+ * RPC that can be unreachable on its own, and `GET /me` is polled every five
+ * seconds by the header on every screen — so a chain outage returns `null` for
+ * one field rather than failing the request and taking the whole app's money
+ * display down with it. Three states, and the type carries all three: an
+ * amount, zero, and unknown.
+ *
+ * Required-and-nullable rather than optional, deliberately. Optionality invites
+ * `?? 0`, and "we could not read it" rendered as "$0.00" is a seller being told
+ * they earned nothing when in truth nobody looked. `fetchMe` in `./me.ts`
+ * normalises an absent or unreadable value to `null` for the same reason.
  *
  * NOTE: field names are provisional — api-design documents the meanings but not
  * the exact JSON casing. If API-01 lands different names, this file is the only
@@ -30,6 +45,8 @@ export interface AccountSummary {
   address: string;
   availableBalanceMinor: Cents;
   inEscrowMinor: Cents;
+  /** On-chain, read server-side. `null` = the chain read failed — unknown, never zero. */
+  settledFundsMinor: Cents | null;
 }
 
 /**
@@ -483,4 +500,72 @@ export interface CaseFile {
   exclusions: string[];
   output: unknown | null;
   steps: CaseFileStep[];
+}
+
+/**
+ * `GET /me/ledger` (api-design §3.2): one movement of the platform balance.
+ *
+ * Mirrors `ledger_entries` (database-schema §3.2) field for field, which is why
+ * the API side of this endpoint is a serialiser rather than a design exercise.
+ *
+ * **`amountMinor` is signed — credits positive, debits negative — and the sign
+ * is the only source of truth for direction.** Nothing in this app infers
+ * direction from `kind`: an `adjustment` goes either way by definition, and a
+ * fifth kind added upstream would too.
+ *
+ * What is *not* here, and cannot be: an entry for a settlement. When an order
+ * concludes, the contract credits `balances[buyer]` and `balances[seller]` —
+ * the users' own addresses — and the platform never sees that money again
+ * (database-schema §3.3). So the statement is a complete explanation of the
+ * available balance and of nothing else, which is a fact the Wallet page states
+ * on screen rather than leaving a reader to discover as a hole in the books.
+ */
+export type LedgerKind = 'onramp' | 'purchase' | 'offramp' | 'adjustment';
+
+export interface LedgerEntry {
+  id: string;
+  /** SIGNED. Credits positive, debits negative. Whole USD cents. */
+  amountMinor: Cents;
+  kind: LedgerKind;
+  /** Set on `purchase` — the order this movement paid for. */
+  orderId: string | null;
+  /** A transfer id or an on-chain tx hash, when the movement had one. */
+  externalRef: string | null;
+  /** ISO 8601. */
+  createdAt: string;
+}
+
+/**
+ * `POST /topup` and `POST /offramp` (api-design §3.2) — the two movements of
+ * *platform* money, both of which take an amount.
+ *
+ * Money leaves the way it came in: top-ups draw from the demo treasury and
+ * cash-outs return to it (rain-integration §0.3). That symmetry is why the
+ * funder wallet's balance is a live health check on the whole loop, and why
+ * both requests carry an amount rather than one of them meaning "all of it".
+ *
+ * `POST /withdraw` has no request type on purpose. `withdrawFor(wallet)` moves
+ * the whole settled balance to the caller's own address; there is no partial
+ * withdrawal for a client to ask for.
+ */
+export interface TopupRequest {
+  amountMinor: Cents;
+}
+
+export interface OfframpRequest {
+  amountMinor: Cents;
+}
+
+/**
+ * `POST /withdraw` (api-design §3.2).
+ *
+ * `txHash` is `null` when the backend did not report one. The wallet screen
+ * degrades to a plain confirmation in that case rather than rendering a link
+ * with nothing behind it — the same rule `TxHashLink` applies on the verdict
+ * card, and for the same reason: a link that fails when it is followed is worse
+ * than no link, because it fails in front of the one person who cared enough to
+ * check.
+ */
+export interface WithdrawResponse {
+  txHash: string | null;
 }
