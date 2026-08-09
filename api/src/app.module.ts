@@ -1,19 +1,20 @@
-import { Module } from '@nestjs/common';
+import { Module } from "@nestjs/common";
 
-import { AccountsModule } from './accounts/accounts.module';
-import { AuthModule } from './auth/auth.module';
-import { CatalogModule } from './catalog/catalog.module';
-import { ChainModule } from './chain/chain.module';
-import { AppConfigModule } from './config/config.module';
-import { DatabaseModule } from './database/database.module';
-import { ExecutionModule } from './execution/execution.module';
-import { GuardianModule } from './guardian/guardian.module';
-import { FundingModule } from './funding/funding.module';
-import { HealthModule } from './health/health.module';
-import { JobsModule } from './jobs/jobs.module';
-import { LedgerModule } from './ledger/ledger.module';
-import { OrdersModule } from './orders/orders.module';
-import { RainModule } from './rain/rain.module';
+import { AccountsModule } from "./accounts/accounts.module";
+import { AuthModule } from "./auth/auth.module";
+import { CatalogModule } from "./catalog/catalog.module";
+import { ChainModule } from "./chain/chain.module";
+import { AppConfigModule } from "./config/config.module";
+import { DatabaseModule } from "./database/database.module";
+import { DemoModule } from "./demo/demo.module";
+import { ExecutionModule } from "./execution/execution.module";
+import { GuardianModule } from "./guardian/guardian.module";
+import { FundingModule } from "./funding/funding.module";
+import { HealthModule } from "./health/health.module";
+import { JobsModule } from "./jobs/jobs.module";
+import { LedgerModule } from "./ledger/ledger.module";
+import { OrdersModule } from "./orders/orders.module";
+import { RainModule } from "./rain/rain.module";
 
 /**
  * Import order is roughly dependency order, which is documentation rather than
@@ -44,6 +45,15 @@ import { RainModule } from './rain/rain.module';
  * — the escrow will permit `release` after the review window and will never do
  * it unprompted — every abandoned run stuck in `running` forever, and every
  * undelivered deal holding a buyer's money past its deadline.
+ *
+ * `DemoModule` is registered for a version of the same reason, and its failure
+ * mode is quieter than either. Its two routes are the visible part; its
+ * `onModuleInit` is the load-bearing part, because that is what registers the
+ * three demo fixtures into the (otherwise empty) script registry. Drop this
+ * import and the endpoints 404 — but the seeded agents still exist and still
+ * run, live, producing plausible output nobody asked for. Last in the list
+ * because it depends on `CatalogModule`, `AccountsModule` and `ExecutionModule`
+ * and is depended on by nothing.
  */
 @Module({
   imports: [
@@ -61,6 +71,7 @@ import { RainModule } from './rain/rain.module';
     FundingModule,
     RainModule,
     AuthModule,
+    DemoModule,
   ],
 })
 export class AppModule {}

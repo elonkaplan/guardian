@@ -75,6 +75,25 @@ export const envSchema = z.object({
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/, 'expected 0x-prefixed 40-hex-char address'),
 
+  // The payout address every seeded demo agent is registered under, and
+  // therefore where every seller payout in the demo lands — Act 1's full
+  // release and Act 2's split both arrive here.
+  //
+  // ⚠️ REQUIRED rather than defaulted or optional, and the difference is not
+  // stylistic. `registerAgent(owner, …)` fixes the payout address at
+  // registration and `updateAgent` cannot change it, so a wrong value cannot be
+  // corrected — only re-registered as a second agent, which is exactly the
+  // "seller owns two agents, one unreachable" state agent-writes.service.ts
+  // spends a paragraph forbidding. Requiring it here makes an absent value a
+  // boot failure named in the preflight report, rather than a seed that
+  // succeeds against an address nobody in the room controls.
+  //
+  // No default for the same reason: any address this file could invent is one
+  // whose key nobody holds. (specs/011-demo-seed-fixtures/research.md R7)
+  DEMO_SELLER_ADDRESS: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/, 'expected 0x-prefixed 40-hex-char address'),
+
   OPERATOR_PRIVATE_KEY: z
     .string()
     .regex(

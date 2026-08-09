@@ -28,13 +28,32 @@ import { AgentsService } from './agents.service';
  * availability toggle all go through it, and the single cents-to-base-units
  * conversion stays on its far side (invariant #2).
  *
- * Nothing is exported. No other module needs to read the catalogue yet; API-07
- * will need an agent-version lookup for the purchase saga, and that is the
- * moment to add one export rather than pre-emptively widening the surface now.
+ * **Two exports, added by API-11 for the demo seed — and this is the moment the
+ * original note anticipated.** It said nothing was exported *yet*, and that the
+ * moment to add one was when a module genuinely needed it rather than
+ * pre-emptively. `DemoModule` needs both:
+ *
+ * - `AgentWritesService` because the seed must publish its three listings
+ *   through the **real seller path**. Anything else — a direct insert, a
+ *   demo-only creation helper — produces rows with no `registerAgent` behind
+ *   them, and `GET /agents` filters those out precisely because they cannot be
+ *   bought. A duplicate of this path inside `demo/` would also duplicate the
+ *   hashing, the transaction, and the unknown-outcome branch, and the copy that
+ *   drifts is always the one nobody is looking at.
+ * - `AgentRepository` for the seed's idempotency check: "does this agent already
+ *   exist, and does its active version still hash to what the code says?" is a
+ *   read, and it is the read that keeps a second seed from creating a second
+ *   listing.
+ *
+ * ⚠️ **`AgentsService` and `AgentVersionsService` stay unexported.** They are the
+ * buyer-facing and owner-facing serialisers, and the demo has no business
+ * reaching them — the exports above are writes and one lookup, not a way to read
+ * the catalogue past its boundary.
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Agent, AgentVersion]), ChainModule],
   controllers: [AgentsController],
   providers: [AgentRepository, AgentsService, AgentVersionsService, AgentWritesService],
+  exports: [AgentWritesService, AgentRepository],
 })
 export class CatalogModule {}
