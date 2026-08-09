@@ -63,6 +63,10 @@ import { SettlementService } from './settlement.service';
     OrdersService,
     CaseFileService,
   ],
-  exports: [EscrowExposureRepository],
+  // `OrderRepository` is exported for `GuardianModule` alone, so that
+  // `GET /orders/:id/verdict` authorises through `findVisibleToAccount` —
+  // the same buyer-or-agent-owner query the other two reads use — rather than
+  // growing a sixth copy of that rule (specs/009 contracts/verdict-api.md §3).
+  exports: [EscrowExposureRepository, OrderRepository],
 })
 export class OrdersModule {}

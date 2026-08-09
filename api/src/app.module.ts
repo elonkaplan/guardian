@@ -7,6 +7,7 @@ import { ChainModule } from './chain/chain.module';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { ExecutionModule } from './execution/execution.module';
+import { GuardianModule } from './guardian/guardian.module';
 import { FundingModule } from './funding/funding.module';
 import { HealthModule } from './health/health.module';
 import { LedgerModule } from './ledger/ledger.module';
@@ -44,6 +45,7 @@ import { RainModule } from './rain/rain.module';
     OrdersModule,
     CatalogModule,
     ExecutionModule,
+    GuardianModule,
     AccountsModule,
     FundingModule,
     RainModule,

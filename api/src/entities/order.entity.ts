@@ -163,4 +163,45 @@ export class Order {
 
   @Column({ type: 'timestamptz', name: 'settled_at', nullable: true })
   settledAt!: Date | null;
+
+  /**
+   * How many times Guardian has tried and failed to audit this order.
+   *
+   * ⚠️ **Only `src/guardian/` may write this, and it is about the AUDIT, not the
+   * complaint.** A dispute is filed once and never amended
+   * (`complaints.order_id UNIQUE`); this counts our failures to rule on it —
+   * a refusal, a truncation, an untraceable citation, a leaked prompt, a
+   * timeout. Nothing outside the guardian module may reset it, and resetting it
+   * to re-open a decided dispute is not a supported operation:
+   * `verdicts.order_id UNIQUE` would refuse the second ruling anyway, which is
+   * the correct outcome.
+   *
+   * The audit-pending query reads it as `audit_attempts < 3`
+   * (`GUARDIAN_MAX_AUDIT_ATTEMPTS`), so this column is what stops a
+   * deterministically-failing case from burning model calls forever.
+   */
+  @Column({ type: 'smallint', name: 'audit_attempts', default: 0 })
+  auditAttempts!: number;
+
+  /**
+   * When Guardian gave up. NULL for every order that has not exhausted its
+   * audit attempts — which is almost all of them.
+   *
+   * ⚠️ **This is not a state, and adding one would have been the wrong fix.**
+   * The order is still `disputed`, because the dispute is still real and still
+   * unresolved; what failed is our ability to rule on it. A new `order_state`
+   * member would mean migrating the enum and deciding whether it belongs in
+   * `ESCROWED_ORDER_STATES` (it would — the tokens are still escrowed), to say
+   * something this column already says (research R14).
+   *
+   * ⚠️ **Its whole purpose is to be visible.** `GET /orders/:id/verdict` reads
+   * it to return `409 AUDIT_FAILED` instead of the in-progress `404`, because
+   * without that the two are indistinguishable and the buyer's screen says a
+   * ruling is being prepared indefinitely. No scheduled job touches a stuck
+   * dispute — API-10's reaper covers `running` only — so the escrow's 72-hour
+   * `DISPUTE_DEADLINE` plus permissionless `forceResolve` is the only thing that
+   * ever moves such an order, and it is deliberately slow.
+   */
+  @Column({ type: 'timestamptz', name: 'audit_failed_at', nullable: true })
+  auditFailedAt!: Date | null;
 }

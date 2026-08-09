@@ -169,6 +169,33 @@ export const envSchema = z.object({
     .int('expected a positive integer')
     .positive('expected a positive integer')
     .default(1000),
+
+  // How often the guardian poller looks for a disputed order to audit, and for
+  // an adjudicated one still waiting on its `resolve` (research R1).
+  //
+  // Slower than `EXECUTION_POLL_INTERVAL_MS` on purpose: an audit is one long
+  // model call rather than a stream of short ones, and pickup latency here is
+  // bounded by "the ruling is readable within a minute of the complaint"
+  // (SC-003) rather than by a screen refresh.
+  GUARDIAN_POLL_INTERVAL_MS: z.coerce
+    .number('expected a positive integer')
+    .int('expected a positive integer')
+    .positive('expected a positive integer')
+    .default(2000),
+
+  // The deadline on a single audit, enforced twice inside `ClaudeAuditor` — as
+  // the SDK's own request timeout and as an `AbortController` armed for the same
+  // instant (FR-038, research R14).
+  //
+  // Generous because thinking is on by default on Opus 5, so a real audit
+  // legitimately runs for tens of seconds. Finite because one audit occupies the
+  // poller's only slot: an unbounded call does not lose one dispute, it stops
+  // every later dispute from being decided (SC-012).
+  GUARDIAN_AUDIT_TIMEOUT_MS: z.coerce
+    .number('expected a positive integer')
+    .int('expected a positive integer')
+    .positive('expected a positive integer')
+    .default(180_000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
