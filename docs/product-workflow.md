@@ -10,12 +10,14 @@ from this document.**
 >
 > | Cut | Sections affected |
 > | --- | --- |
-> | **Agent buyers** (autonomous buying agents + Rain spend-limited cards) | §2.3, §2.4, §4.8, §5.3 Act 3, §7.3 |
+> | **Agent buyers** (autonomous buying agents + Rain spend-limited cards) | §2.3, §2.4, §4.8, §5.3 Act 3′, §7.3 |
 > | **Per-purchase card charges** — replaced by onramp top-up | §7.7 (already rewritten) |
 >
-> **Buyers are humans only in the MVP**, so **Act 3 cannot be staged** and the demo
-> is two acts. See [database-schema.md](./database-schema.md) §2.1 for the reasoning
-> and a cheap restore path.
+> **Buyers are humans only in the MVP.** This does **not** cost the demo a verdict
+> tier: **the demo is three acts — 0%, 50%, 100%** (§5.3). What is deferred is only
+> the buyer being a *machine* in the third one, kept as §5.3 Act 3′. See
+> [database-schema.md](./database-schema.md) §2.1 for the reasoning and a cheap
+> restore path.
 >
 > Deferred sections are kept rather than deleted — the design is sound, and it's the
 > obvious first thing to add after the hackathon.
@@ -333,30 +335,57 @@ The receipt has **5** line items; LedgerBot returns **3** and drops two.
 *Why this is the centrepiece:* the audience can count the rows themselves and reach the verdict
 **before Guardian does**. That's what makes the ruling feel trustworthy instead of magic.
 
-#### Act 3 — the autonomous full refund (100%)  **[DEFERRED — not in MVP]**
+#### Act 3 — non-delivery, full refund (100%)
 
-> *Cannot be staged without agent buyers. **The demo is Acts 1 and 2.*** The escrow
-> paths Act 3 covered (full refund, `reclaim`) still exist on-chain and are testable
-> — they just aren't performed live.*
+A **human buyer** hires **PolyglotAI** ($1.50) to translate a product description.
+The agent **crashes and returns nothing** — the order lands in `failed` with
+`runs.output = NULL`. The buyer complains.
 
-A **buying agent**, carrying a **spend-limited Rain card**, hires **PolyglotAI**.
-The seller agent crashes and returns nothing.
-The buying agent detects the failure and **files the complaint itself**.
+**Verdict: 100%.** The entire $1.50 returns to the buyer; the seller is paid nothing.
 
-**Verdict: 100%.** Funds return, and the agent **retries with a different seller**.
-**No human touches this act.**
+*Why the demo closes here:* it's the cleanest possible verdict, and it's the one the
+audience can check **without reading anything**. Acts 1 and 2 ask them to compare an
+output against criteria. Act 3 has no output to compare — the case file's `output`
+field is empty, and that absence *is* the evidence (§4.3). It closes the tier range
+the demo covers at both ends: **0% → 50% → 100%**, so nobody leaves wondering whether
+Guardian only ever splits the difference.
 
-*Why the demo closes here:* it's the entire thesis in 30 seconds — a machine bought something, got
-cheated, sought arbitration, won, and moved on.
+**Note the source of the evidence.** The crash is recorded by *our* wrapper, not
+reported by the seller (§6.2). Guardian isn't taking anyone's word that nothing
+arrived — which is the whole reason the platform runs the agents.
+
+> **Staging note.** Nothing here needs infrastructure beyond Acts 1 and 2. It is the
+> same purchase flow down its already-designed failure branch: the `failed` state
+> exists, non-delivery is already a near-automatic 100% (§4.3), and the order page
+> already renders that face with a Complain action. The only new asset is
+> PolyglotAI's seeded crash (§5.5).
+
+#### Act 3′ — the *autonomous* full refund  **[DEFERRED — not in MVP]**
+
+> *The tier is demonstrated by Act 3 above; what is deferred is the **buyer being a
+> machine**. That needs agent buyers, which were cut — see the scope banner.*
+
+The same non-delivery, with **no human anywhere in it**: a buying agent carrying a
+**spend-limited Rain card** hires PolyglotAI, detects the failure itself, **files the
+complaint itself**, and on winning **retries with a different seller**.
+
+*Why it was worth staging:* it's the entire thesis in 30 seconds — a machine bought
+something, got cheated, sought arbitration, won, and moved on. Worth **saying** during
+Act 3 even though it isn't shown; the verdict is already machine-readable for exactly
+this reason (§2.4).
 
 ### 5.4 Why this shape
 
 The acts are ordered so the demo **argues** rather than merely displays:
 
-> **Guardian is fair** → **Guardian is precise** → **Guardian works without us.**
+> **Guardian is fair** → **Guardian is precise** → **Guardian is decisive.**
 
-Each act also exercises a different escrow path — **full release**, **split**, **full refund** — so
-the contract is completely demonstrated by the end of the run.
+Fair, because it rules against the buyer first. Precise, because the audience reaches
+50% by counting before Guardian announces it. Decisive, because when nothing was
+delivered it takes back everything rather than hedging.
+
+Each act also exercises a different escrow path — **full release**, **split**, **full
+refund** — so the contract is completely demonstrated by the end of the run.
 
 ### 5.5 Demo rig — stated honestly
 
@@ -366,6 +395,21 @@ misbehaves on schedule.
 
 This is a **demo-rig decision, recorded up front** — not something to discover at 4am. Guardian's
 audit itself runs for real; only the seller agents' failure modes are scripted.
+
+**Three fixtures are needed, one per act.** They are content rather than code, and no
+spec currently owns them:
+
+| Act | Agent | Seeded input | Must reliably produce |
+| --- | --- | --- | --- |
+| 1 | TLDR Agent | A document + criteria *"under 100 words, must cover the pricing change"* | A summary of **~85 words that does cover it** — the complaint must be genuinely unfounded |
+| 2 | LedgerBot | A receipt with **exactly 5** line items | Exactly **3** returned, **2** dropped — and the two must be nameable |
+| 3 | PolyglotAI | A product description to translate | A **crash / empty return**, so `runs.output IS NULL` |
+
+Act 2's fixture is the fussy one: the receipt has to be countable at a glance from the
+back of a room, so few enough rows to count and the two omissions obvious once named.
+Act 1's is the one most easily got wrong in the other direction — if the summary
+misses the pricing change, the complaint becomes *valid* and Guardian ruling 0% turns
+from a fairness demonstration into a visible misfire.
 
 ---
 

@@ -95,6 +95,15 @@ names the two missing items and rules **50%**. The escrow splits live on screen.
 *The audience can count the rows themselves and reach the verdict before Guardian
 announces it. That's what makes the ruling feel checkable rather than magic.*
 
+**Act 3 — non-delivery (100%).** A buyer hires PolyglotAI to translate a product
+description. The agent crashes and returns nothing. Guardian rules **100%** and the
+full price comes back.
+
+*The only act with nothing to read. The case file's output field is empty, and that
+absence is the evidence — recorded by our wrapper, not reported by the seller.*
+
+Three acts, three tiers, three escrow paths: **full release · split · full refund.**
+
 ---
 
 ## Repository layout

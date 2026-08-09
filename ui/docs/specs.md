@@ -206,7 +206,7 @@ The trade is deliberate and worth naming: the contract is the one component wher
 bug moves money incorrectly *and* costs a redeploy plus an `.env` update to fix.
 Everything else can be corrected in place while the app is running.
 
-**Consequence:** demo rehearsal is now the test suite. Run Acts 1 and 2 end to end
+**Consequence:** demo rehearsal is now the test suite. Run all three acts end to end
 more than once, and treat a failed rehearsal the way you'd treat a red build.
 
 ## Individual spec files

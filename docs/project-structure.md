@@ -447,7 +447,7 @@ Roughly dependency-ordered; each step is verifiable before the next.
 | 8 | Orders + execution | An order runs end to end and delivers |
 | 9 | Guardian + `resolve` | A verdict settles on-chain |
 | 10 | Sweeper | An uncontested order auto-releases |
-| 11 | `ui/` | Acts 1 and 2 clickable |
+| 11 | `ui/` | All three acts clickable |
 | 12 | Rehearse | Twice, minimum |
 
 **Steps 1–3 are the real spike.** They're where the unknowns are, and everything

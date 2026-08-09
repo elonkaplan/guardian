@@ -792,7 +792,7 @@ decisions rather than oversights.
 
 **One backend-side note carried over**, because it's a bug risk rather than an edge
 case: if `reviewWindow` reaches the contract as `0` from a missing config or a JS
-`undefined`, Acts 1 and 2 fail *silently* on stage — the window closes instantly and
+`undefined`, every act fails *silently* on stage — the window closes instantly and
 Complain never works. A one-line guard where the backend builds the transaction
 covers it, with no Solidity change.
 

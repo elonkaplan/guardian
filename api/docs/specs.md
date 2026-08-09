@@ -192,8 +192,8 @@ from the stored definition, and no public response contains a prompt.
 debit is a window where the same balance can be spent twice.
 
 **`0` is a silent killer.** A review window of zero means the complaint button never
-works and the order auto-releases instantly — no error anywhere, and Acts 1 and 2
-both die on stage.
+works and the order auto-releases instantly — no error anywhere, and every act
+dies on stage.
 
 **Done when** a purchase completes end to end, the escrow holds the money, and a
 forced chain failure leaves the buyer's balance whole.
@@ -305,7 +305,7 @@ rather than hoping a live model misbehaves on schedule.
 **Act 1's agent must succeed.** Its point is that Guardian rejects an unjustified
 complaint — get that wrong and the demo's opening argument inverts.
 
-**Done when** a seeded database can run Acts 1 and 2 end to end, twice, with the
+**Done when** a seeded database can run all three acts end to end, twice, with the
 same verdicts.
 
 **Source:** product-workflow §5, agent-definition §6.
@@ -320,7 +320,7 @@ The trade is deliberate and worth naming: the contract is the one component wher
 bug moves money incorrectly *and* costs a redeploy plus an `.env` update to fix.
 Everything else can be corrected in place while the app is running.
 
-**Consequence:** demo rehearsal is now the test suite. Run Acts 1 and 2 end to end
+**Consequence:** demo rehearsal is now the test suite. Run all three acts end to end
 more than once, and treat a failed rehearsal the way you'd treat a red build.
 
 ## Individual spec files

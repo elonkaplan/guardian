@@ -74,5 +74,5 @@ the only test suite we keep is the escrow contract's (`sc/` SC-02), because a
 contract bug means money moving wrong and costs a redeploy to fix.
 
 **Acceptance criteria in these specs are therefore verified by hand.** Which makes
-the demo rehearsal the real test suite — run Acts 1 and 2 end to end more than once,
+the demo rehearsal the real test suite — run all three acts end to end more than once,
 and treat a failed rehearsal the way you'd treat a red build.
