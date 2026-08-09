@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import type { Citation, CitationStatus } from '../api/types';
+import type { Perspective } from '../lib/perspective';
 
 interface CitationChecklistProps {
   /**
@@ -12,6 +13,15 @@ interface CitationChecklistProps {
    * that were not objects and so could not be turned into rows.
    */
   unreadableCount: number;
+  /**
+   * Which party is reading. Required, never defaulted — see `lib/perspective`.
+   *
+   * Two strings vary: the note above the list, and the label on a citation that
+   * came from the buyer's acceptance criteria. The clause text, the marks, the
+   * ordering, and the counting do not — a checklist that showed the two parties
+   * different evidence would defeat the purpose of showing evidence at all.
+   */
+  perspective: Perspective;
 }
 
 /**
@@ -60,13 +70,15 @@ interface CitationChecklistProps {
 export function CitationChecklist({
   citations,
   unreadableCount,
+  perspective,
 }: CitationChecklistProps): JSX.Element {
   return (
     <section className="citation-checklist" aria-label="Cited clauses">
       <h3 className="citation-checklist__heading">The clauses this ruling weighed</h3>
       <p className="citation-checklist__note">
-        Quoted from the agent's listing and from the criteria you wrote before the work
-        started. Each one is marked with whether it held.
+        {perspective === 'buyer'
+          ? "Quoted from the agent's listing and from the criteria you wrote before the work started. Each one is marked with whether it held."
+          : 'Quoted from your listing and from the criteria the buyer wrote before the work started. Each one is marked with whether it held.'}
       </p>
 
       {citations.length === 0 ? (
@@ -98,7 +110,9 @@ export function CitationChecklist({
                 </span>
                 <span className="citation-checklist__word">{statusWord(citation.status)}</span>
               </span>
-              <p className="citation-checklist__source">{sourceLabel(citation.source)}</p>
+              <p className="citation-checklist__source">
+                {sourceLabel(citation.source, perspective)}
+              </p>
               {citation.clause !== null && citation.clause.trim() !== '' ? (
                 <blockquote className="citation-checklist__quote">{citation.clause}</blockquote>
               ) : (
@@ -138,14 +152,19 @@ export function CitationChecklist({
  * to see what. `null` means the citation arrived with no origin at all, which is
  * a weaker statement than any of the three labels and so gets the bare noun.
  */
-function sourceLabel(source: string | null): string {
+function sourceLabel(source: string | null, perspective: Perspective): string {
   switch (source) {
+    // Neither of these varies with the reader, and that is deliberate rather
+    // than an omission. "Promised capability" and "Declared exclusion" are facts
+    // about where the clause came from — the listing — and the listing is one
+    // document whichever side of it you are on. Only the criterion has an author
+    // the two parties would name differently.
     case 'capability':
       return 'Promised capability';
     case 'exclusion':
       return 'Declared exclusion';
     case 'criterion':
-      return 'Your criterion';
+      return perspective === 'buyer' ? 'Your criterion' : "The buyer's criterion";
     case null:
       return 'Clause';
     default:

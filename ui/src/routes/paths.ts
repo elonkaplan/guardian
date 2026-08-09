@@ -18,6 +18,12 @@ export const routePatterns = {
   wallet: '/wallet',
   sell: '/sell',
   createAgent: '/sell/new',
+  // Nested under /sell rather than as /sell/:id. React Router v7 would rank the
+  // static /sell/new above a dynamic sibling anyway, but this path cannot
+  // collide with it under any ordering — one less thing that has to stay true
+  // when somebody adds /sell/settings later. It is a *sale* detail, and a sale
+  // is an order, so the id in it is an order id.
+  sellerSale: '/sell/sales/:id',
 } as const;
 
 export const paths = {
@@ -29,4 +35,5 @@ export const paths = {
   wallet: () => '/wallet',
   sell: () => '/sell',
   createAgent: () => '/sell/new',
+  sellerSale: (id: string) => `/sell/sales/${id}`,
 } as const;

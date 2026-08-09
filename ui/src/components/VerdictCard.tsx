@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import type { ApiError } from '../api/errors';
 import type { Order, Verdict } from '../api/types';
 import { formatUsd } from '../lib/money';
+import type { Perspective } from '../lib/perspective';
 import { splitFor, tierDisplay } from '../lib/verdict';
 import { CitationChecklist } from './CitationChecklist';
 import { TxHashLink } from './TxHashLink';
@@ -10,6 +11,17 @@ import { TxHashLink } from './TxHashLink';
 interface VerdictCardProps {
   /** The order the ruling is about — the source of the price the split reconciles to. */
   order: Order;
+  /**
+   * Which party is reading. Required, never defaulted — see `lib/perspective`.
+   *
+   * It renames the two figures in the split and is forwarded to the checklist,
+   * and that is the whole of its reach. The tier, the reasoning, the citations,
+   * the arithmetic, and the transaction are identical for both parties, because
+   * a ruling that read differently depending on who opened it would not be a
+   * ruling. A seller who suspects the buyer was shown a friendlier version of
+   * this card has no way to check, so the card must not give them the idea.
+   */
+  perspective: Perspective;
   /** Undefined until the ruling has been read. */
   verdict: Verdict | undefined;
   error: ApiError | null;
@@ -61,6 +73,7 @@ export function VerdictCard({
   error,
   settlementPending,
   onRetry,
+  perspective,
 }: VerdictCardProps): JSX.Element {
   if (verdict === undefined) {
     return (
@@ -111,7 +124,7 @@ export function VerdictCard({
         </p>
       </header>
 
-      <Split split={split} />
+      <Split split={split} perspective={perspective} />
 
       {/*
         The checklist leads. This is the feature.
@@ -119,6 +132,7 @@ export function VerdictCard({
       <CitationChecklist
         citations={verdict.citations}
         unreadableCount={verdict.unreadableCitations}
+        perspective={perspective}
       />
 
       {verdict.reasoning.trim() !== '' && (
@@ -161,15 +175,25 @@ export function VerdictCard({
  * — would be the one lie this screen cannot afford, because every other claim
  * here is offered as checkable.
  */
-function Split({ split }: { split: ReturnType<typeof splitFor> }): JSX.Element {
+function Split({
+  split,
+  perspective,
+}: {
+  split: ReturnType<typeof splitFor>;
+  perspective: Perspective;
+}): JSX.Element {
   return (
     <div className="verdict-card__split">
       <p className="verdict-card__figure">
-        <span className="verdict-card__figure-label">You get back</span>
+        <span className="verdict-card__figure-label">
+          {perspective === 'buyer' ? 'You get back' : 'The buyer gets back'}
+        </span>
         <span className="verdict-card__figure-value">{formatUsd(split.buyerMinor)}</span>
       </p>
       <p className="verdict-card__figure">
-        <span className="verdict-card__figure-label">The seller keeps</span>
+        <span className="verdict-card__figure-label">
+          {perspective === 'buyer' ? 'The seller keeps' : 'You keep'}
+        </span>
         <span className="verdict-card__figure-value">
           {split.ok ? (
             formatUsd(split.sellerMinor)

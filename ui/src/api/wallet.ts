@@ -1,3 +1,4 @@
+import { unwrapList } from '../lib/listEnvelope';
 import { apiGet, apiPost } from './client';
 import type { LedgerEntry, WithdrawResponse } from './types';
 import type { Cents } from '../lib/money';
@@ -48,48 +49,23 @@ import type { Cents } from '../lib/money';
  * the ambiguous branches in `WalletActions` can both be deleted.
  */
 
-/** Shape a list response might plausibly take. See `unwrapEntries`. */
-type ListEnvelope = Record<string, unknown>;
-
 /**
- * Accept either a bare array or a single-key envelope around one.
+ * `GET /me/ledger` — every movement of the available balance, newest first.
  *
- * The second use of this pattern in the app, and it earns it on exactly the
- * grounds `fetchAgents` sets out in `./agents.ts`: the asymmetry of the
- * failure. An envelope misread as an array yields `[]`, which this screen
- * faithfully renders as "no activity yet" — a plausible, silent, wrong success,
- * on the one screen whose entire job is to account for where the money went.
- * A wrong *field* name inside an entry renders as a blank cell, which is loud
- * and gets fixed.
+ * The envelope tolerance that used to live here as a private `unwrapEntries` is
+ * now `lib/listEnvelope`, shared with the three other list endpoints in the app.
+ * The argument for it is unchanged and is written out there: an envelope misread
+ * as an array yields `[]`, which this screen faithfully renders as "no activity
+ * yet" — a plausible, silent, wrong success on the one screen whose entire job
+ * is to account for where the money went.
  *
- * Still not generalised into `client.ts`, for the reason given there: it should
- * not be reachable by accident from a future endpoint.
+ * So is the argument against generalising it any further. It is a named function
+ * this fetcher calls with its own keys, not a branch inside `client.ts` that a
+ * future endpoint would inherit by accident.
  */
-function unwrapEntries(payload: unknown): LedgerEntry[] {
-  if (Array.isArray(payload)) {
-    return payload as LedgerEntry[];
-  }
-
-  if (payload !== null && typeof payload === 'object') {
-    const envelope = payload as ListEnvelope;
-    for (const key of ['entries', 'items', 'data'] as const) {
-      const inner = envelope[key];
-      if (Array.isArray(inner)) {
-        return inner as LedgerEntry[];
-      }
-    }
-  }
-
-  // Neither shape. Empty rather than a throw: the statement's own empty state
-  // is a better outcome than a blank screen, and the network tab still holds
-  // the truth for whoever is debugging it.
-  return [];
-}
-
-/** `GET /me/ledger` — every movement of the available balance, newest first. */
 export async function fetchLedger(): Promise<LedgerEntry[]> {
   const payload = await apiGet<unknown>('/me/ledger');
-  return unwrapEntries(payload);
+  return unwrapList<LedgerEntry>(payload, ['entries', 'items', 'data']);
 }
 
 /**

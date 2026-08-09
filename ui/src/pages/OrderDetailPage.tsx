@@ -272,6 +272,7 @@ function ArbitrationFace({ order }: { order: Order }) {
           error={error}
           settlementPending={settlementPending}
           onRetry={refetch}
+          perspective="buyer"
         />
       ) : null}
 
@@ -281,6 +282,7 @@ function ArbitrationFace({ order }: { order: Order }) {
         loading={caseFile.loading}
         defaultOpen
         onRetry={caseFile.refetch}
+        perspective="buyer"
       />
 
       <div className="order__review-columns">
@@ -328,6 +330,7 @@ function ConcludedFace({ order }: { order: Order }) {
           error={error}
           settlementPending={settlementPending}
           onRetry={refetch}
+          perspective="buyer"
         />
       )}
 
@@ -344,6 +347,7 @@ function ConcludedFace({ order }: { order: Order }) {
           loading={caseFile.loading}
           defaultOpen={false}
           onRetry={caseFile.refetch}
+          perspective="buyer"
         />
       ) : null}
 

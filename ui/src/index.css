@@ -3127,3 +3127,530 @@ code {
     white-space: normal;
   }
 }
+
+/* ---- Seller: home (my agents, my sales) ---- */
+
+.sell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.sell__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.sell__title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.5rem;
+}
+
+.sell__lede {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--color-text-muted);
+}
+
+/* The way in. Kept beside the heading so it is reachable without scrolling
+   past either list, whether the seller has no agents or forty (FR-008). */
+.sell__new {
+  flex: none;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius);
+  color: var(--color-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sell__new:hover {
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.owned-agents__heading,
+.sales__heading {
+  margin: 0 0 var(--space-3);
+  font-size: 1.1rem;
+}
+
+/* Each section scrolls inside its own region, so a long inventory cannot push
+   the sales list off the screen and vice versa (FR-010). The max-height is
+   generous enough that neither scrolls at demo sizes. */
+.owned-agents__scroll,
+.sales__scroll {
+  max-height: 26rem;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.owned-agents__list,
+.sales__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.owned-agents__row,
+.sales__row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.owned-agents__row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.owned-agents__list > li:last-child .owned-agents__row,
+.sales__list > li:last-child .sales__row {
+  border-bottom: none;
+}
+
+.owned-agents__name {
+  min-width: 0;
+  font-weight: 600;
+}
+
+.owned-agents__price,
+.sales__amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* An agent that is off the market is dimmed, but dimming is never the only
+   signal — `AvailabilityToggle` prints the state as a word beside it, because
+   this screen gets projected and screenshotted in greyscale. */
+.owned-agents__row--inactive {
+  color: var(--color-text-muted);
+}
+
+.owned-agents__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.owned-agents__empty-link {
+  color: var(--color-accent);
+}
+
+.sales__row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.sales__link {
+  display: contents;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sales__link:hover .sales__agent {
+  color: var(--color-accent);
+}
+
+.sales__agent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales__state {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.sales__time {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* A dispute is the one thing on this list a seller must not scroll past. The
+   left rule survives greyscale; the word beside it is what actually carries the
+   meaning. */
+.sales__row--disputed {
+  border-left: 3px solid var(--color-warning);
+}
+
+.sales__dispute-flag {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-warning);
+  white-space: nowrap;
+}
+
+/* ---- Seller: availability toggle ---- */
+
+/* Quiet, like the wallet's disconnect. Taking a listing off the market is
+   routine and reversible, so it gets no danger colour. */
+.availability {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+
+.availability__button {
+  display: inline-flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.availability__button:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.availability__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.availability__state {
+  font-weight: 600;
+}
+
+.availability__action {
+  color: var(--color-text-muted);
+}
+
+.availability__error {
+  margin: 0;
+  max-width: 28ch;
+  font-size: 0.8rem;
+  color: var(--color-danger);
+  text-align: right;
+}
+
+/* ---- Seller: create agent ---- */
+
+.create-agent {
+  max-width: 46rem;
+}
+
+.create-agent__breadcrumb {
+  margin: 0 0 var(--space-4);
+}
+
+.create-agent__breadcrumb a {
+  color: var(--color-accent);
+}
+
+.create-agent__title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.5rem;
+}
+
+.create-agent__lede {
+  margin: 0 0 var(--space-8);
+  max-width: 56ch;
+  color: var(--color-text-muted);
+}
+
+.create-agent__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.create-agent__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.create-agent__label,
+.term-list__label,
+.schema-field__label {
+  font-weight: 600;
+}
+
+/* Guidance, not a warning. These sentences are the cheapest lever this product
+   has on the quality of Guardian's evidence, so they are always visible and
+   never styled as something to dismiss (FR-013). */
+.create-agent__hint,
+.term-list__hint,
+.schema-field__hint {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.create-agent__input,
+.create-agent__textarea {
+  padding: var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.create-agent__textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.create-agent__textarea--prompt {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.create-agent__input:focus-visible,
+.create-agent__textarea:focus-visible,
+.term-list__input:focus-visible,
+.schema-field__input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.create-agent__input[aria-invalid='true'],
+.create-agent__textarea[aria-invalid='true'],
+.schema-field__input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.create-agent__error,
+.schema-field__error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-danger);
+}
+
+.create-agent__submit {
+  align-self: flex-start;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #0b1020;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.create-agent__submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.create-agent__submit-error,
+.create-agent__ambiguous {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.create-agent__submit-error {
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+}
+
+/* Not a failure the seller caused, and not one they can fix by pressing again —
+   so it is warned, not alarmed, and the link out is the way forward. */
+.create-agent__ambiguous {
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+}
+
+.create-agent__ambiguous a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* ---- Seller: contract term lists ---- */
+
+.term-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.term-list__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.term-list__row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.term-list__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.term-list__remove,
+.term-list__add {
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.term-list__remove:hover:not(:disabled),
+.term-list__add:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.term-list__add {
+  align-self: flex-start;
+}
+
+.term-list__remove:disabled,
+.term-list__add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- Seller: raw JSON contract fields ---- */
+
+.schema-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Monospace because it is a document, not prose: a misplaced brace has to be
+   findable by eye, since this form checks that the text parses and nothing more. */
+.schema-field__input {
+  padding: var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  resize: vertical;
+  tab-size: 2;
+}
+
+/* ---- Seller: one sale, and the dispute against it ---- */
+
+.seller-sale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.seller-sale--missing {
+  max-width: 40rem;
+}
+
+.seller-sale__breadcrumb {
+  margin: 0;
+}
+
+.seller-sale__breadcrumb a,
+.seller-sale--missing a {
+  color: var(--color-accent);
+}
+
+.seller-sale__missing-title {
+  margin: 0 0 var(--space-2);
+  font-size: 1.3rem;
+}
+
+.seller-sale__missing-note {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.seller-sale__stale {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  color: var(--color-warning);
+}
+
+.seller-sale__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.seller-sale__heading {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.seller-sale__note {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+/* The sentence that makes an absence read as a decision (FR-033).
+   Deliberately not a warning and not an error: nothing has gone wrong, and
+   styling it as a problem would undo the work the wording is doing. It is set
+   apart from the note above it so that it is read rather than skimmed. */
+.seller-sale__finality {
+  margin: 0;
+  max-width: 68ch;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-left: 3px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+@media (max-width: 40rem) {
+  .owned-agents__row,
+  .sales__row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .availability {
+    align-items: flex-start;
+  }
+
+  .availability__error {
+    text-align: left;
+  }
+}

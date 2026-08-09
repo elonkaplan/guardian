@@ -569,3 +569,114 @@ export interface OfframpRequest {
 export interface WithdrawResponse {
   txHash: string | null;
 }
+
+/**
+ * `GET /agents?owner=me` (api-design §3.3): the catalogue row, plus the one
+ * flag only an owner is shown.
+ *
+ * The public list is active-only; this one **includes inactive agents**, and
+ * api-design §3.3 gives the reason in the endpoint table itself — without them
+ * the availability control is one-way, because switching an agent off would
+ * remove it from the only screen that could switch it back on.
+ *
+ * **What is missing is the point, exactly as on `AgentListing`.** There is no
+ * `systemPrompt`, no `model`, no `timeoutSeconds`, no schemas — and adding one
+ * would be a defect rather than a convenience. The owner's execution spec is
+ * available from `GET /agents/:id/versions`, an endpoint this app deliberately
+ * never calls; and if `?owner=me` ever hands back whole version rows, the
+ * seller's list still has nowhere to put a prompt. That is FR-037 enforced by
+ * the shape of the data rather than by everyone remembering, and it holds for
+ * the seller's own prompt too — `ui/docs/CONTEXT.md` §2 is unconditional that
+ * this application has no code path that renders one.
+ *
+ * NOTE: field names are provisional, for the same reason as `AccountSummary`
+ * above. `agents.active` is a real column with a `true` default, so a new
+ * listing is on the market the moment it exists.
+ */
+export interface OwnedAgent extends AgentSummary {
+  active: boolean;
+}
+
+/**
+ * `GET /sales` (api-design §3.4): an order placed against an agent this account
+ * owns — the same trade the buyer sees, from the other side.
+ *
+ * Six fields, and deliberately not `Order`. This type is the **sales list's
+ * alone**: the seller's dispute screen reads `GET /orders/:id` directly, which
+ * api-design §3.4 authorises for the buyer *or* the agent's owner, so nothing
+ * here has to stand in for a full order. Declaring fewer fields than arrive is
+ * safe; declaring more is what renders blank.
+ *
+ * `id` is the **order** id, not a separate sale id. It is what `/sell/sales/:id`
+ * carries and what all three of the dispute screen's reads are keyed on.
+ *
+ * `disputedAt` is carried as a fact rather than inferred from `state`, on the
+ * reasoning `ConcludedFace` already uses: it is true from the moment a complaint
+ * is filed and stays true through every state after it, so a state added later
+ * in the lifecycle cannot silently mislabel a row. Testing `state === 'settled'`
+ * instead would miss a dispute still in flight.
+ *
+ * There is no `buyerAddress`. The seller learns what was ordered, what it cost,
+ * and what was ruled — not who bought it.
+ */
+export interface Sale {
+  id: string;
+  agentName: string;
+  priceMinor: Cents;
+  state: OrderState;
+  createdAt: string;
+  disputedAt: string | null;
+}
+
+/**
+ * `POST /agents` (api-design §3.3): one agent and its version 1, in one request.
+ *
+ * Maps field for field onto `agent_versions` (database-schema §3.4), which is
+ * why this is a transcription rather than a design. Two omissions are
+ * deliberate, and both are a refusal to hold a second opinion:
+ *
+ * - **No `timeoutSeconds`.** The column defaults to 120 and the form does not
+ *   collect it.
+ * - **No `active`.** `agents.active` defaults to `true`. A client-supplied
+ *   value would be a second authority over whether a brand-new listing is live,
+ *   and the availability control is how it is changed afterwards.
+ *
+ * `inputSchema` and `outputSchema` are `Record<string, unknown>` rather than
+ * `JsonSchema`. `JsonSchema` describes the slice of the vocabulary this app
+ * *reads* when it builds a buyer's form; what a seller types into a raw
+ * textarea is arbitrary JSON, and narrowing it here would claim this app
+ * validated something it deliberately does not (research R12 — the backend
+ * validates schemas, API-06 scopes it, and a client-side validator would be the
+ * second opinion that eventually disagrees).
+ *
+ * **This type only ever travels outward.** `createAgent` discards its response,
+ * so `systemPrompt` and `model` are written once and never read back — which is
+ * what makes the no-prompt-rendering guarantee structural rather than
+ * remembered.
+ */
+export interface CreateAgentRequest {
+  name: string;
+  description: string;
+  priceMinor: Cents;
+  capabilities: string[];
+  exclusions: string[];
+  inputSchema: Record<string, unknown>;
+  outputSchema: Record<string, unknown>;
+  systemPrompt: string;
+  model: string;
+}
+
+/**
+ * `PATCH /agents/:id/active` (api-design §3.3).
+ *
+ * **An absolute value, never a toggle instruction**, and the distinction is
+ * load-bearing rather than stylistic. Sending the state we want makes this call
+ * idempotent in the literal sense — applying it twice leaves the world exactly
+ * as applying it once did — which is why the non-idempotency doctrine that
+ * governs `POST /orders` and the three money POSTs explicitly does not extend
+ * to it (see `./agents.ts`). A server-side toggle would make a duplicate
+ * request undo the first one, and silence would become unresolvable.
+ */
+export interface SetAgentActiveRequest {
+  active: boolean;
+}

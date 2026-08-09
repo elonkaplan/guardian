@@ -11,6 +11,7 @@ import { MyOrdersPage } from '../pages/MyOrdersPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { OrderDetailPage } from '../pages/OrderDetailPage';
 import { PollTestPage } from '../pages/PollTestPage';
+import { SellerSalePage } from '../pages/SellerSalePage';
 import { WalletPage } from '../pages/WalletPage';
 import { routePatterns } from './paths';
 
@@ -71,6 +72,22 @@ export function AppRoutes() {
           element={
             <RequireAuth>
               <CreateAgentPage />
+            </RequireAuth>
+          }
+        />
+        {/*
+          The seller's side of one sale. Its own screen rather than an expansion
+          in the sales list — a case file plus a verdict card is taller than a
+          list row, and two open disputes would turn that page into a wall — and
+          deliberately not a second face on the buyer's order screen, which is
+          the product's hero and is judged on being one order's state machine
+          for one party.
+        */}
+        <Route
+          path={routePatterns.sellerSale}
+          element={
+            <RequireAuth>
+              <SellerSalePage />
             </RequireAuth>
           }
         />

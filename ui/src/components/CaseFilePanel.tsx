@@ -1,12 +1,22 @@
 import type { JSX } from 'react';
 import type { CaseFile } from '../api/types';
 import type { ApiError } from '../api/errors';
+import type { Perspective } from '../lib/perspective';
 import { ExecutionSteps } from './ExecutionSteps';
 import { OutputPanel } from './OutputPanel';
 
 interface CaseFilePanelProps {
   /** The case file once it has loaded; `undefined` while it has not. */
   caseFile: CaseFile | undefined;
+  /**
+   * Which party is reading. Required, never defaulted — see `lib/perspective`.
+   *
+   * Three sentences in this panel name whose input and whose criteria are being
+   * shown, and read by the seller each of them is simply wrong about who did
+   * what. Nothing else varies: the same sections, in the same order, quoting the
+   * same text. Both parties are looking at one record.
+   */
+  perspective: Perspective;
   /** The last fetch failure, if the fetch failed. Owned and reported here (FR-035). */
   error: ApiError | null;
   loading: boolean;
@@ -73,6 +83,7 @@ export function CaseFilePanel({
   loading,
   defaultOpen,
   onRetry,
+  perspective,
 }: CaseFilePanelProps): JSX.Element {
   return (
     <details className="case-file" open={defaultOpen}>
@@ -80,10 +91,13 @@ export function CaseFilePanel({
           reader has to decide whether the thing is worth opening. "Case file"
           alone names a container; this says what is inside it and who read it. */}
       <summary className="case-file__summary">
-        The case file Guardian read — your input, your criteria, the listing&rsquo;s
-        promises, and what the agent did
+        {perspective === 'buyer'
+          ? 'The case file Guardian read — your input, your criteria, the listing’s promises, and what the agent did'
+          : 'The case file Guardian read — the buyer’s input, their criteria, your listing’s promises, and what your agent did'}
       </summary>
-      <div className="case-file__body">{renderBody(caseFile, error, loading, onRetry)}</div>
+      <div className="case-file__body">
+        {renderBody(caseFile, error, loading, onRetry, perspective)}
+      </div>
     </details>
   );
 }
@@ -93,6 +107,7 @@ function renderBody(
   error: ApiError | null,
   loading: boolean,
   onRetry: () => void,
+  perspective: Perspective,
 ): JSX.Element {
   // The error is reported before anything else and in place of the sections,
   // because a half-drawn case file is worse than a stated failure: a reader who
@@ -136,12 +151,18 @@ function renderBody(
           out, what came back, and finally how it was produced. A reader
           following it top to bottom has assembled the dispute by the end. */}
       <section className="case-file__section">
-        <h3 className="case-file__heading">What you submitted</h3>
+        <h3 className="case-file__heading">
+          {perspective === 'buyer' ? 'What you submitted' : 'What the buyer submitted'}
+        </h3>
         {renderInput(caseFile.input)}
       </section>
 
       <section className="case-file__section">
-        <h3 className="case-file__heading">Your acceptance criteria</h3>
+        <h3 className="case-file__heading">
+          {perspective === 'buyer'
+            ? 'Your acceptance criteria'
+            : 'The buyer’s acceptance criteria'}
+        </h3>
         {caseFile.acceptanceCriteria.trim() !== '' ? (
           // Pre-wrapped by the class so the buyer's own line breaks survive.
           // This is one of the two texts the checklist quotes from; reflowing it

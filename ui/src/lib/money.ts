@@ -36,6 +36,26 @@ export const TREASURY_CEILING_CENTS: Cents = 1_000_000;
 export type ParseResult = { ok: true; cents: Cents } | { ok: false; message: string };
 
 /**
+ * The one thing a caller may vary about `parseUsd`.
+ *
+ * Every other rule below is the app's definition of a dollar amount and is not
+ * negotiable per call site — that is the entire reason `AmountField` delegates
+ * here instead of validating its own input. The ceiling *message* is the
+ * exception because the ceiling means different things in different places: on
+ * a top-up it is the demo treasury's capacity, and on a listing price it is
+ * nothing of the sort. A seller typing `50000` where they meant `500.00` should
+ * not be corrected with a sentence about somebody else's wallet.
+ *
+ * The ceiling *value* stays shared deliberately. Both uses guard the same
+ * thing — a slipped decimal point at the same order of magnitude — and a second
+ * constant would imply this product has a pricing policy, which it does not.
+ */
+export interface ParseUsdOptions {
+  /** Shown when the amount exceeds `TREASURY_CEILING_CENTS`. Defaults to the treasury wording. */
+  ceilingMessage?: string;
+}
+
+/**
  * Turns what a person typed into an amount field back into cents, or refuses.
  *
  * The module comment above rules out `parseFloat(x) * 100`: it works today — 19.99 becomes
@@ -61,7 +81,7 @@ export type ParseResult = { ok: true; cents: Cents } | { ok: false; message: str
  *
  * See specs/006-wallet-page/research.md R6 for the full rule table this was derived from.
  */
-export function parseUsd(input: string): ParseResult {
+export function parseUsd(input: string, options: ParseUsdOptions = {}): ParseResult {
   const trimmed = input.trim();
   if (trimmed === '') {
     return { ok: false, message: 'Enter an amount.' };
@@ -92,7 +112,10 @@ export function parseUsd(input: string): ParseResult {
   }
 
   if (cents > TREASURY_CEILING_CENTS) {
-    return { ok: false, message: 'That is more than this demo\'s treasury holds.' };
+    return {
+      ok: false,
+      message: options.ceilingMessage ?? 'That is more than this demo\'s treasury holds.',
+    };
   }
 
   return { ok: true, cents };
