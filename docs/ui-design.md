@@ -226,7 +226,13 @@ Decided: polling, no SSE (api-design §8).
 | **Order Detail** | 1s | State is terminal (`released` / `settled`) |
 | **Wallet** | 5s | Never (a deposit can land at any time) |
 | **My Orders** | 5s | Never |
+| **My Agents (`/sell`)** | 5s | Never — **it is the seller's only notification** |
 | Everything else | — | Load only |
+
+**`/sell` polls because there is no other channel.** No email, no push, no bell — the
+sales list *is* how a seller learns a dispute was filed against them
+(product-workflow §7.5, "the seller is notified"). Load-only would make that sentence
+false, and a seller who has to refresh to discover a complaint has not been notified.
 
 **Only Order Detail needs the fast interval**, and only while an order is live. Stop
 polling on a terminal state — a demo laptop hammering an endpoint for an order that

@@ -152,7 +152,8 @@ so nothing here re-converts — invariant #2 holds.
 
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
-| `GET` | `/agents` | public | Active listings |
+| `GET` | `/agents` | public | Active listings **only** |
+| `GET` | `/agents?owner=me` | owner | **Includes inactive.** Without this the availability toggle is one-way — deactivating an agent removes it from the owner's own list and it can never be switched back on |
 | `GET` | `/agents/:id` | public | **Listing fields only** — never the execution spec |
 | `POST` | `/agents` | seller | Creates agent + version 1, hashes the definition, calls `registerAgent` |
 | `POST` | `/agents/:id/versions` | owner | New immutable version, calls `updateAgent` |
@@ -169,12 +170,19 @@ with a branch means there is no conditional to get wrong.
 | --- | --- | --- |
 | `POST` | `/orders` | `{ agentId, input, acceptanceCriteria }` — the purchase saga (§4) |
 | `GET` | `/orders` | Mine, as buyer |
-| `GET` | `/orders/:id` | State, output, timings |
-| `GET` | `/orders/:id/case-file` | **Redacted** for a buyer, full for the seller |
-| `POST` | `/orders/:id/accept` | Early acceptance → `accept()` on-chain |
-| `POST` | `/orders/:id/complain` | `{ reason }` → `dispute()` on-chain, enqueues the audit |
-| `GET` | `/orders/:id/verdict` | Tier, reasoning, citations, tx hash |
+| `GET` | `/orders/:id` | State, output, timings. **Buyer *or* seller** |
+| `GET` | `/orders/:id/case-file` | **Buyer *or* seller** — redacted for the buyer, full for the seller |
+| `POST` | `/orders/:id/accept` | Early acceptance → `accept()` on-chain. **Buyer only** |
+| `POST` | `/orders/:id/complain` | `{ reason }` → `dispute()` on-chain, enqueues the audit. **Buyer only** |
+| `GET` | `/orders/:id/verdict` | Tier, reasoning, citations, tx hash. **Buyer *or* seller** |
 | `GET` | `/sales` | Mine, as seller |
+
+**Authorise the three reads on `buyer_account_id` *or* the agent's owner — not the
+buyer alone.** The narrow check is the natural one to write and it silently removes
+half the seller experience: a seller who is told a dispute was filed and then cannot
+open the case file or read the verdict has been notified of an accusation they are
+not allowed to see. The three writes stay buyer-only, since only a buyer accepts or
+complains (product-workflow §7.5 — the seller is notified but has no right of reply).
 
 ### 3.5 Demo
 
