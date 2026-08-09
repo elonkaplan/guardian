@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 
 import type { Order } from '../api/types';
+import { CaseFilePanel } from '../components/CaseFilePanel';
 import { CriteriaPanel } from '../components/CriteriaPanel';
 import { LoadState } from '../components/LoadState';
 import { OrderActions } from '../components/OrderActions';
@@ -8,10 +9,12 @@ import { OrderSummaryHeader } from '../components/OrderSummaryHeader';
 import { OutputPanel } from '../components/OutputPanel';
 import { ReviewCountdown } from '../components/ReviewCountdown';
 import { SubmittedInput } from '../components/SubmittedInput';
-import { VerdictSlot } from '../components/VerdictSlot';
+import { VerdictCard } from '../components/VerdictCard';
+import { useCaseFile } from '../hooks/useCaseFile';
 import { useCountdown } from '../hooks/useCountdown';
 import { useNow } from '../hooks/useNow';
 import { useOrder } from '../hooks/useOrder';
+import { useVerdict } from '../hooks/useVerdict';
 import { formatElapsed } from '../lib/duration';
 import type { OrderFace } from '../lib/orderState';
 import { faceFor } from '../lib/orderState';
@@ -232,11 +235,17 @@ function NothingCameBackFace({ order }: { order: Order }) {
  *
  * Nothing to do and nothing to press — which is the point. The buyer has spent their
  * one irreversible action and the honest thing is to say what is happening and keep
- * following the order, rather than to invent a control. The evidence Guardian is
- * reading (the case file) is deliberately not shown: it is a later feature, and it
- * arrives with a redaction obligation this one does not take on.
+ * following the order, rather than to invent a control.
+ *
+ * What there is to do is read. The case file opens expanded here, because during
+ * arbitration it is the only thing on the page worth looking at and the face would
+ * otherwise be a sentence and a spinner; on the concluded face it starts collapsed
+ * beneath the ruling instead (FR-020, FR-024).
  */
 function ArbitrationFace({ order }: { order: Order }) {
+  const { verdict, error, settlementPending, refetch } = useVerdict(order.id, order.state);
+  const caseFile = useCaseFile(order.id, order.disputedAt !== null);
+
   return (
     <div className="order__face order__face--arbitration">
       <h2 className="order__face-title order__face-title--arbitration">
@@ -249,7 +258,30 @@ function ArbitrationFace({ order }: { order: Order }) {
         not need to stay on this page, and you do not need to refresh it.
       </p>
 
-      {order.state === 'adjudicated' ? <VerdictSlot state={order.state} /> : null}
+      {/*
+        `adjudicated` is the half of this face where a ruling already exists and the
+        escrow has not split yet, so the card renders in full — tier, split,
+        checklist — with a settlement-pending line where the transaction will go. The
+        hook is called unconditionally and decides for itself whether to fetch, which
+        is why `disputed` costs no request.
+      */}
+      {order.state === 'adjudicated' ? (
+        <VerdictCard
+          order={order}
+          verdict={verdict}
+          error={error}
+          settlementPending={settlementPending}
+          onRetry={refetch}
+        />
+      ) : null}
+
+      <CaseFilePanel
+        caseFile={caseFile.caseFile}
+        error={caseFile.error}
+        loading={caseFile.loading}
+        defaultOpen
+        onRetry={caseFile.refetch}
+      />
 
       <div className="order__review-columns">
         <OutputPanel output={order.run?.output ?? null} />
@@ -266,11 +298,19 @@ function ArbitrationFace({ order }: { order: Order }) {
  *
  * The two endings are not interchangeable and the copy must not treat them as one.
  * `released` is the uncontested path — the window closed, or the buyer accepted, and
- * the seller was paid in full. `settled` is the end of a dispute, and the ruling that
- * produced it is the next feature's subject; what belongs here is the reserved region
- * for it, never a blank.
+ * the seller was paid in full. There is no ruling on that path and so no verdict card;
+ * conflating the two would put a refund tier on an order nobody ever disputed.
+ * `settled` is the end of a dispute, and the card is the whole of what belongs here.
  */
 function ConcludedFace({ order }: { order: Order }) {
+  const { verdict, error, settlementPending, refetch } = useVerdict(order.id, order.state);
+  // Keyed on the fact rather than the state: `disputedAt` is true of the order from the
+  // moment a complaint is filed and stays true through every state after it, so a state
+  // inserted later in the lifecycle cannot silently drop the evidence. A `released`
+  // order has none, and asks for none (FR-025).
+  const disputed = order.disputedAt !== null;
+  const caseFile = useCaseFile(order.id, disputed);
+
   return (
     <div className="order__face order__face--concluded">
       {order.state === 'released' ? (
@@ -282,8 +322,30 @@ function ConcludedFace({ order }: { order: Order }) {
           </p>
         </>
       ) : (
-        <VerdictSlot state={order.state} />
+        <VerdictCard
+          order={order}
+          verdict={verdict}
+          error={error}
+          settlementPending={settlementPending}
+          onRetry={refetch}
+        />
       )}
+
+      {/*
+        Collapsed, and beneath the ruling. On this face the card is the answer and the
+        case file is the working behind it, so it starts closed — a reader who wants the
+        evidence is one click away, and one who does not is not made to scroll past it
+        to reach the record below (FR-024).
+      */}
+      {disputed ? (
+        <CaseFilePanel
+          caseFile={caseFile.caseFile}
+          error={caseFile.error}
+          loading={caseFile.loading}
+          defaultOpen={false}
+          onRetry={caseFile.refetch}
+        />
+      ) : null}
 
       {/*
         The record stays whole. A settled order is the one a buyer comes back to

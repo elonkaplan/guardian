@@ -301,3 +301,179 @@ export interface Order {
 export interface ComplainRequest {
   reason: string;
 }
+
+/**
+ * The five values of the backend's `verdict_tier` enum, in its declaration
+ * order (`docs/database-schema.md` §5, `api/specs/002-entities-migrations/data-model.md`
+ * §8).
+ *
+ * Kept character-for-character identical to that list for the same reason
+ * `OrderState` is: Postgres sorts enum values by declaration, so the order is
+ * not free to be rearranged over there, and a diff between the two files is the
+ * only mechanism either side has for noticing a change.
+ *
+ * A union rather than `string` so `tierDisplay` can be exhaustively switched. A
+ * sixth tier added upstream then becomes a compile error in one file rather than
+ * a card with a blank badge.
+ *
+ * Note what this type is *not* used for: arithmetic. The percentage a tier
+ * implies is a display string, and the money figures come from `refundMinor`
+ * (see `Verdict` below).
+ */
+export type VerdictTier = 'none' | 'quarter' | 'half' | 'three_quarter' | 'full';
+
+/** Which side of the contract a cited clause came from. */
+export type CitationSource = 'capability' | 'exclusion' | 'criterion';
+
+/**
+ * Whether a cited clause was met — three-valued, and the third value is the
+ * point.
+ *
+ * A boolean has no way to say *the ruling did not record this*, so a normaliser
+ * producing one would have to choose between `true`, which fabricates a passed
+ * clause, and `false`, which fabricates a failed one and defames a seller.
+ * Neither is available: this screen's whole claim is that every mark on it comes
+ * from the ruling. `unrecorded` is the honest answer and renders as its own row
+ * treatment.
+ */
+export type CitationStatus = 'met' | 'unmet' | 'unrecorded';
+
+/**
+ * A citation as it arrives, before `normaliseVerdict` has looked at it.
+ *
+ * Every field optional and `unknown` because `verdicts.citations` is
+ * `jsonb NOT NULL DEFAULT '[]'` with no schema behind it — Postgres will accept
+ * any JSON document in that column, and the API's own data model types it
+ * `unknown[]`. A type promising three present, correctly-typed fields would be
+ * describing a document nothing upstream validated.
+ *
+ * Not exported past `src/api/verdicts.ts`. Components see `Citation`.
+ */
+export interface RawCitation {
+  source?: unknown;
+  clause?: unknown;
+  met?: unknown;
+}
+
+/**
+ * A citation as it renders: where the clause came from, the clause itself, and
+ * whether it held.
+ *
+ * `source` widens to `string` beyond the three known values on purpose. An
+ * unfamiliar origin is not a reason to drop evidence from a checklist whose
+ * entire job is showing the evidence — the row renders labelled with whatever
+ * the ruling called it.
+ *
+ * `clause` is nullable for the same reason rather than defaulted to an empty
+ * string: "the ruling cited a clause it did not quote" is a fact the reader
+ * should see stated, and an empty string would render as a blank quotation mark
+ * that reads like a layout bug.
+ */
+export interface Citation {
+  source: CitationSource | string | null;
+  clause: string | null;
+  status: CitationStatus;
+}
+
+/**
+ * `GET /orders/:id/verdict` (api-design §3.4): the ruling on a disputed order,
+ * normalised at the boundary.
+ *
+ * **`refundMinor` is authoritative for both money figures, and the tier is a
+ * label.** It is the figure the API computed, hashed into `verdict_hash`, and
+ * handed to `resolve()` on-chain — so it is what actually moved. A percentage
+ * recomputed on the client would be a second, independent calculation of a
+ * rounded quantity, and two such calculations disagree eventually: a quarter of
+ * 199 cents is 49.75, and whichever way this app rounded it there would be a
+ * version of the demo where the card says one thing and the block explorer says
+ * another. The seller's share is `order.priceMinor - refundMinor` and nothing
+ * else.
+ *
+ * `citations` is a required array, never optional. The column defaults to `[]`,
+ * so it may be empty but is never absent, and an empty list is a statement the
+ * screen makes ("no clauses were cited") rather than a section that silently
+ * fails to render — the same argument as `AgentListing.capabilities`.
+ *
+ * `txHash` is `string`, not viem's `Hex`. It is an arbitrary text column until
+ * `isTxHash` says otherwise; typing it `Hex` here would assert the validation
+ * the card exists to perform before it turns the value into a link.
+ *
+ * `unreadableCitations` is produced by the normaliser rather than sent over the
+ * wire. It exists so that a citation this app could not parse is *counted* on
+ * screen instead of vanishing — a dropped row would quietly shrink the evidence.
+ *
+ * What is missing is again the point. There is no `verdictHash`, no `model`, and
+ * no `id`: the hash is an anchoring detail a buyer cannot recompute, the model
+ * name is an internal reproducibility record, and rendering either would push
+ * this card back towards "an AI decided this" — which is the one thing the
+ * citation checklist exists to prevent.
+ */
+export interface Verdict {
+  /**
+   * The tier as it arrived. `string` rather than `VerdictTier`, deliberately:
+   * this is an unvalidated wire value, and typing it as the union here would be
+   * a claim no code has checked — `VerdictTier | string` would be worse still,
+   * since TypeScript collapses that to plain `string` while *looking* like a
+   * guarantee. The union is enforced where it is actually tested, inside
+   * `tierDisplay`, whose exhaustive switch is what makes a sixth tier a compile
+   * error.
+   */
+  tier: string;
+  refundMinor: Cents;
+  reasoning: string;
+  citations: Citation[];
+  txHash: string | null;
+  createdAt: string;
+  /** Elements of the payload's `citations` that were not objects. */
+  unreadableCitations: number;
+}
+
+/**
+ * One action the agent took, as the buyer is allowed to see it.
+ *
+ * **This type has no `prompt`, no `systemPrompt`, no `reasoning`, and no `raw`
+ * field, and that absence is the guarantee** — the same enforcement used on
+ * `AgentListing` and `OrderRun`, applied to the payload where it matters most.
+ *
+ * It is worth being explicit that this does not reverse `OrderRun`'s decision to
+ * carry no steps at all. `GET /orders/:id` is a general order read with no
+ * redaction contract; `GET /orders/:id/case-file` is the one route api-design
+ * §3.4 marks *"redacted for a buyer, full for the seller"*, whose serialiser
+ * does not merely strip `system_prompt` but **summarises reasoning text**,
+ * precisely because a step can paraphrase its own instructions (api-design §1.3,
+ * ui-design §7.1). So `summary` holds what that serialiser produced, and there
+ * is nowhere here for raw model reasoning to land even if the API regressed and
+ * started sending it.
+ */
+export interface CaseFileStep {
+  label: string;
+  summary: string | null;
+  durationMs: number | null;
+  error: string | null;
+}
+
+/**
+ * `GET /orders/:id/case-file` (api-design §3.4): the evidence Guardian was
+ * handed, redacted upstream for the buyer's copy.
+ *
+ * `capabilities` and `exclusions` are the listing text of the **agent version
+ * that ran**, which is why this app never fetches `GET /agents/:id` to fill this
+ * panel. An order pins its version (agent-definition §5) and a seller who lost a
+ * dispute has every reason to edit the capability that was cited against them;
+ * explaining a ruling with today's listing would break the trace from a citation
+ * to its source, quietly, in the one direction that would look like the product
+ * covering for the seller.
+ *
+ * `output` is `unknown` for the same reason it is on `OrderRun` — its shape is
+ * the seller's `outputSchema`, known only at runtime — and it is rendered
+ * through the same `OutputPanel`, so the case file and the page above it cannot
+ * disagree about what was delivered.
+ */
+export interface CaseFile {
+  input: Record<string, unknown>;
+  acceptanceCriteria: string;
+  capabilities: string[];
+  exclusions: string[];
+  output: unknown | null;
+  steps: CaseFileStep[];
+}

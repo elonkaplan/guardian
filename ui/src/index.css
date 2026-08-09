@@ -2104,95 +2104,569 @@ code {
   }
 }
 
-/* ---- Verdict slot, and the two concluded faces ---- */
+/* ---- The verdict card ---- */
 
 /*
-  The verdict region is where this feature stops, and the styling has to say that
-  it stopped on purpose.
+  The card that concludes a disputed order, and the one component whose styling
+  is load-bearing for an argument rather than for a mood.
 
-  The card that eventually fills it — tier, reasoning, clause checklist, split
-  figures, transaction hash — is UI-05. `VerdictSlot` reserves the space in the
-  meantime and renders only a heading and a sentence. That is a scope boundary,
-  not an unfinished edge, and until the card lands the region has to look
-  intentional: a section of a finished product whose contents are pending, never
-  a gap in the page (FR-007).
+  The failure mode this layout exists to avoid is a *handsome* one: a big tier
+  badge, two money figures, and a well-set paragraph. That card is correct and it
+  is worth nothing, because it asks the reader to believe a model. So the visual
+  budget goes where the evidence is — the checklist gets the width, the row
+  separation, and the contrast, while the reasoning is set as supporting prose
+  beneath it (FR-005).
 
-  Which rules out the two obvious shorthands. A dashed outline is the universal
-  sign for "TODO, ignore this", and it would be the loudest thing on the most
-  conclusive screen in the demo. A thin muted line is worse in the other
-  direction — indistinguishable from a panel that failed to load, which invites
-  exactly the "is it broken?" reading the reservation exists to prevent. So it
-  gets the same treatment as every other surface on this page (`--color-surface`,
-  a real border, `--radius`, generous padding) and sits as an equal beside
-  them — a panel that is complete for what it currently claims.
+  Sized for a room, not a desk. The badge and the two figures are the numbers an
+  audience reads from the back during a demo (SC-005), which is why they are the
+  only type on this page above 1.5rem.
 */
 
-.verdict-slot {
+.verdict-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-surface));
+}
+
+.verdict-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.verdict-card__heading {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.verdict-card__badge {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.verdict-card__badge-percent {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-card__badge-phrase {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+}
+
+/*
+  Two figures, side by side, always both present — including the zero side. A
+  `none` verdict that showed only "the seller keeps $2.00" would be an
+  announcement rather than a settlement, and the buyer's nothing is half of what
+  was decided (FR-003).
+*/
+
+.verdict-card__split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+
+.verdict-card__figure {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.verdict-card__figure-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.verdict-card__figure-value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  The dash is deliberately plain. It marks a figure this screen declines to
+  invent, and dressing it in danger colour would read as an error in the
+  interface rather than as a refusal to state a number that does not reconcile.
+*/
+
+.verdict-card__figure-unknown {
+  color: var(--color-text-muted);
+}
+
+.verdict-card__reconcile {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-warning);
+}
+
+/*
+  Supporting prose, and styled to read as support: narrower measure than the
+  checklist above it, muted, and clearly a second voice. `pre-wrap` because the
+  ruling's own paragraph breaks are part of the record — reflowing them would be
+  editing a decision.
+*/
+
+.verdict-card__reasoning {
   display: grid;
   gap: var(--space-2);
-  padding: var(--space-6);
+}
+
+.verdict-card__reasoning-heading {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.verdict-card__reasoning-text {
+  margin: 0;
+  max-width: 62ch;
+  white-space: pre-wrap;
+  color: var(--color-text);
+}
+
+.verdict-card__footer {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.verdict-card__settling {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+/*
+  The two states with no ruling in them yet. Both keep the card's own surface and
+  border rather than collapsing to a bare line, because this region is the
+  conclusion of the record and a reader arriving at a settled order must never
+  find a gap where the outcome belongs (FR-034 — the rule inherited from the
+  placeholder this card replaced).
+*/
+
+.verdict-card--unread {
+  gap: var(--space-3);
+}
+
+.verdict-card__note {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.verdict-card__error {
+  margin: 0;
+  color: var(--color-text);
+}
+
+.verdict-card__error-detail {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.verdict-card__retry {
+  justify-self: start;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.verdict-card__retry:hover {
+  border-color: var(--color-accent);
+}
+
+/* ---- The citation checklist ---- */
+
+/*
+  The feature.
+
+  Everything here serves one sentence: *this clause, quoted, was or was not met*.
+  Three rules follow from it and none of them is decoration.
+
+  **Rows, visibly.** Each citation gets its own bordered block with its own left
+  rule, because the moment they run together the reader is looking at a paragraph
+  again and the argument is lost (FR-007).
+
+  **Never colour alone.** Every row carries a glyph and a word as well as a tint.
+  The three viewing conditions that matter are all hostile to colour and all
+  normal rather than exceptional: a projector with crushed contrast, a screenshot
+  pasted into a deck, and a colour-blind reader. A checklist that only works on a
+  good monitor is not a checklist (FR-010, SC-006) — which is why the modifiers
+  below change border weight and text weight, not just hue.
+
+  **Unmet rows lead.** A 50% verdict is explained by the clauses that failed, so
+  those get the heavier rule and the stronger mark; met rows are quieter without
+  being faint (FR-011).
+*/
+
+.citation-checklist {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.citation-checklist__heading {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.citation-checklist__note {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.citation-checklist__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.citation-checklist__row {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  align-items: start;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+}
+
+.citation-checklist__mark {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.citation-checklist__glyph {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.citation-checklist__source {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/*
+  The quote is the evidence. `pre-wrap` keeps a clause's own line breaks, the
+  measure is capped so a long clause wraps into a readable column instead of a
+  single 200-character line, and `overflow-wrap` stops an unbroken token from
+  widening the row and pushing the rest of the checklist out of view (FR-014).
+*/
+
+.citation-checklist__quote {
+  grid-column: 2;
+  margin: 0;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border);
+  max-width: 70ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-style: italic;
+}
+
+.citation-checklist__missing {
+  grid-column: 2;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.citation-checklist__row--unmet {
+  border-left-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 7%, var(--color-bg));
+}
+
+.citation-checklist__row--unmet .citation-checklist__mark {
+  color: var(--color-danger);
+}
+
+.citation-checklist__row--met {
+  border-left-color: color-mix(in srgb, var(--color-positive) 70%, transparent);
+}
+
+.citation-checklist__row--met .citation-checklist__mark {
+  color: var(--color-positive);
+  font-weight: 500;
+}
+
+/*
+  Not recorded is not a pass, and must never be mistakable for one. It gets the
+  warning colour and its own dashed rule so that at a glance it belongs to
+  neither column (FR-013).
+*/
+
+.citation-checklist__row--unrecorded {
+  border-left-style: dashed;
+  border-left-color: var(--color-warning);
+}
+
+.citation-checklist__row--unrecorded .citation-checklist__mark {
+  color: var(--color-warning);
+}
+
+.citation-checklist__empty,
+.citation-checklist__unreadable {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+}
+
+/* ---- The settlement transaction ---- */
+
+/*
+  The one claim on this page a sceptic can check without trusting anything else
+  in the product. It is set as a footer line rather than a headline — the ruling
+  is what the page is about — but the link has to be unmistakably a link, because
+  the whole value of it is that somebody follows it.
+
+  The three no-link states are styled as plain text on purpose. Nothing here may
+  look pressable when there is nothing behind it (FR-018).
+*/
+
+.tx-hash {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+}
+
+.tx-hash__label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.tx-hash__link {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+.tx-hash__external {
+  margin-left: var(--space-1);
+}
+
+.tx-hash__value {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.tx-hash__copy {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.tx-hash__copy:hover {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
+
+.tx-hash__copied {
+  font-size: 0.8rem;
+  color: var(--color-positive);
+}
+
+.tx-hash__pending,
+.tx-hash__unavailable,
+.tx-hash__malformed {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+/* ---- The case file ---- */
+
+/*
+  The evidence, in a native `<details>`.
+
+  It has to be subordinate to the card without being hidden: on the concluded
+  face the ruling is the answer and this is the working, so it opens collapsed
+  and one click away; during arbitration there is no card yet and it opens
+  expanded, because otherwise that face is a sentence and a spinner (FR-024).
+
+  Every long region inside scrolls within itself. A receipt with forty line items
+  or a twelve-step execution trace must not push the record below it off the page
+  — the panel is evidence to consult, not a document to wade through.
+*/
+
+.case-file {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
 }
 
-.verdict-slot__heading {
-  margin: 0;
-  font-size: 1.05rem;
+.case-file__summary {
+  padding: var(--space-3) var(--space-4);
   font-weight: 600;
+  cursor: pointer;
 }
 
-/* A sentence to be read, so the same measure the face notes get. */
+.case-file__summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
 
-.verdict-slot__note {
+.case-file__body {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.case-file__section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.case-file__heading {
   margin: 0;
-  max-width: 44rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
 }
 
-/*
-  `adjudicated`: ruled, not yet paid out. In-progress, so the warm tint — the same
-  reading the arbitration face gets, for the same reason (a dispute is a supported
-  outcome, not a fault).
-
-  It is nested inside `.order__face--arbitration`, which is itself warning-tinted,
-  so the tint here is pitched above the face's 6% and the border carries more of
-  the separation. Otherwise the panel dissolves into its container and the region
-  reads as loose text rather than a reserved section.
-*/
-
-.verdict-slot--adjudicated {
-  border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--color-warning) 65%, transparent);
-  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface));
+.case-file__list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-6);
 }
 
-.verdict-slot--adjudicated .verdict-slot__heading {
-  color: var(--color-warning);
+.case-file__input {
+  margin: 0;
+  max-height: 18rem;
+  overflow: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.verdict-slot--adjudicated .verdict-slot__note {
+.case-file__empty,
+.case-file__loading {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.case-file__error {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
   color: var(--color-text);
 }
 
+.case-file__retry {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.case-file__retry:hover {
+  border-color: var(--color-accent);
+}
+
 /*
-  `settled`: the dispute is over and the money has moved. Positive tint, matching
-  the `settled`/`released` chips in the summary header so the page agrees with its
-  own status band. Nothing here is a warning any more.
+  The execution trace. Its job is to make a partial refund legible — "one
+  extraction pass, then it stopped" is an explanation in a way a tier is not — so
+  the durations are tabular and aligned, and an errored step is marked rather
+  than blended in.
 */
 
-.verdict-slot--settled {
-  border-color: color-mix(in srgb, var(--color-positive) 35%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--color-positive) 55%, transparent);
-  background: color-mix(in srgb, var(--color-positive) 8%, var(--color-surface));
+.exec-steps {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-6);
+  max-height: 22rem;
+  overflow: auto;
 }
 
-.verdict-slot--settled .verdict-slot__heading {
-  color: var(--color-positive);
+.exec-steps__item {
+  padding-left: var(--space-2);
 }
 
-.verdict-slot--settled .verdict-slot__note {
-  color: var(--color-text);
+.exec-steps__label {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.exec-steps__summary {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.exec-steps__duration {
+  margin-left: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.exec-steps__error {
+  margin: var(--space-1) 0 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+.exec-steps__empty {
+  margin: 0;
+  color: var(--color-text-muted);
 }
 
 /*
@@ -2202,9 +2676,12 @@ code {
   buyer landing on a finished order should feel the transaction closed cleanly,
   not that something happened to it.
 
-  The heading and note rules below only ever hit the `released` branch — the
-  `settled` branch of this face renders `VerdictSlot` instead and is coloured by
-  the `--settled` rules above.
+  The heading and note rules below only ever hit the `released` branch. The
+  `settled` branch renders `VerdictCard` instead, which brings its own surface and
+  its own accent border — deliberately a different colour from the positive tint
+  here, because the two endings are not the same news. A release paid the seller
+  in full and closed cleanly; a settlement split contested money, and colouring it
+  as a happy outcome would editorialise on a ruling the buyer may have lost.
 */
 
 .order__face--concluded {
