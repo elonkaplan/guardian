@@ -11,7 +11,11 @@ Money in, money out — and make the two different kinds of money legible.
 
 ## In scope
 
-- `GET /me` → **available balance** and **in escrow**, as separate figures
+- `GET /me` → **three separate figures**, never collapsed:
+  `availableBalanceMinor`, `inEscrowMinor`, `settledFundsMinor`
+- **`settledFundsMinor` may be `null`** — the backend reads it from the chain and
+  returns `null` rather than failing when that read fails (api-design §3.2.1). Render
+  a dash and disable *Withdraw*; the page keeps working.
 - `GET /me/ledger` → statement, poll at 5s
 - **Add funds** → `POST /topup`; balance updates immediately (sub-second finality)
 - **Withdraw** → `POST /withdraw` — settled funds to your own wallet
@@ -29,6 +33,8 @@ Rain route UI, bank details, transaction history beyond the ledger.
 - Top-up, withdraw, and cash-out each work
 - The ledger explains every balance change
 - Available balance and settled funds are never shown as one number
+- A `null` `settledFundsMinor` renders as a dash with *Withdraw* disabled, and
+  **blanks neither the wallet page nor the header balance widget**
 
 ## Watch out for
 
@@ -38,6 +44,12 @@ Rain route UI, bank details, transaction history beyond the ledger.
   directions — and would make the ledger look broken.
 - **Volunteer where the money came from.** A judge seeing "$100 added" with no bank
   transfer will ask. Answering first is much better than being asked.
+- **Settled funds are on-chain, but the page still reads them from `GET /me`.** The
+  frontend never calls the escrow contract and this figure is not the exception — the
+  backend does the chain read (api-design §3.2.1).
+- **Read the field names literally**: `availableBalanceMinor`, `inEscrowMinor`,
+  `settledFundsMinor`, all in cents. A name that doesn't match renders as an absent
+  value rather than an error, which is exactly how `67dcf4d` happened.
 
 ## Source
 

@@ -168,12 +168,22 @@ writes good exclusions wins them. Say that in the form.
 **Two exits because there are two kinds of money**, and the Wallet page has to make
 that legible or the ledger looks broken:
 
-| | Where it is | How it leaves |
-| --- | --- | --- |
-| **Available balance** | Postgres ledger | *Cash out* → back to the funder |
-| **Settled funds** | On-chain `balances[]` | *Withdraw* → your own wallet |
+| | Where it is | How the page reads it | How it leaves |
+| --- | --- | --- | --- |
+| **Available balance** | Postgres ledger | `GET /me` → `availableBalanceMinor` | *Cash out* → back to the funder |
+| **Settled funds** | On-chain `balances[]` | `GET /me` → `settledFundsMinor` | *Withdraw* → your own wallet |
 
 Conflating them into one "balance" number would be wrong in both directions.
+
+**Settled funds live on-chain but are still read from `GET /me`** — the backend does
+the chain read (api-design §3.2.1). The frontend never calls the escrow contract, and
+this figure is not the exception.
+
+**`settledFundsMinor` can be `null`**, when the backend's chain read failed. That is
+not an error state for the page: render a dash for that one figure, keep the other
+two, and disable *Withdraw* — the same as at zero, since neither case has a knowable
+amount to withdraw. A `null` here must never blank the wallet page or the header
+balance widget.
 
 ---
 
@@ -193,7 +203,7 @@ Conflating them into one "balance" number would be wrong in both directions.
 | | Verdict card | `GET /orders/:id/verdict` |
 | | Explorer link | Monad testnet explorer (external) |
 | **My Orders** | Page load | `GET /orders` |
-| **Wallet** | Page load + poll | `GET /me`, `GET /me/ledger` |
+| **Wallet** | Page load + poll | `GET /me` (all three money figures), `GET /me/ledger` |
 | | **Add funds** | `POST /topup` `{ amountMinor }` — funder wallet → balance |
 | | **Withdraw** | `POST /withdraw` — settled funds to your wallet |
 | | **Cash out** | `POST /offramp` — unspent balance back to the funder |

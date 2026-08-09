@@ -100,7 +100,7 @@ just in the doc.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/me` | Account, available balance, amount currently in escrow |
+| `GET` | `/me` | Account + **three** money figures: available balance, in escrow, and settled funds (§3.2.1) |
 | `GET` | `/me/ledger` | Statement |
 | `POST` | `/onramp/routes` | **STUB** — logs the Rain request body, makes no call (rain §0) |
 | `POST` | `/topup` | **The real funding path.** Funder wallet → operator pool + `kind='onramp'` ledger credit |
@@ -117,9 +117,36 @@ the funder address by the user, exactly as Rain's real offramp works.
 and return a response that says the call was not made — never a fake success. A mock
 that returns `200 OK` is a thing you forget about and accidentally demo.
 
-`GET /me` returning **both** available balance and in-escrow is deliberate — with
-money in four places (database-schema §3.3), a single "balance" number would be a
-lie in three of them.
+#### 3.2.1 `GET /me` returns three money figures
+
+Deliberate. With money in four places (database-schema §3.3), a single "balance"
+number would be a lie in three of them.
+
+| Field | Unit | Source | Nullable |
+| --- | --- | --- | --- |
+| `availableBalanceMinor` | cents | Postgres — `SUM(amount_minor)` | no |
+| `inEscrowMinor` | cents | Postgres — open orders | no |
+| `settledFundsMinor` | cents | **Chain** — `balances(address)` via `chain/` | **yes** |
+
+**Why settled funds must come from the chain.** Settlement writes no ledger entry
+(database-schema §3.3): the contract credits `balances[buyer]` and `balances[seller]`
+at the users' *own* addresses, and `withdrawFor` sends to the address rather than to
+our pool. There is no database representation of this money and by design there never
+will be — it's the same property that lets either party exit without us. So the
+figure has exactly one source, and since the frontend never calls the escrow contract
+(ui §7, `ui/docs/CONTEXT.md` §2), the read happens here.
+
+**`settledFundsMinor` is best-effort and nullable, and that is the important part.**
+`GET /me` is polled every 5s by the balance widget on every page, so this puts an RPC
+round trip on the hottest endpoint in the app. If the chain read fails or times out,
+**return `null` for this field and serve the other two normally** — never fail the
+request. A chain hiccup must not take down the two figures that come from Postgres
+and don't need the chain at all; a missing third number is a dash on one page, a
+failing `/me` is a broken balance widget everywhere. Bad connectivity is a demo-day
+condition, not a hypothetical.
+
+The conversion to cents already happens inside `chain/` (`balances` returns cents),
+so nothing here re-converts — invariant #2 holds.
 
 ### 3.3 Catalogue
 
