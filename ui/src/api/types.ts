@@ -351,7 +351,14 @@ export type CitationStatus = 'met' | 'unmet' | 'unrecorded';
  */
 export interface RawCitation {
   source?: unknown;
-  clause?: unknown;
+  /**
+   * The cited text. **Named `quote` because that is what the API sends**
+   * (`api/docs/specs/API-09` · `docs/tech-stack.md` §5); it becomes `clause` on
+   * the rendered `Citation`. Renaming this to match the rendered field would
+   * null every citation on the page without failing a build — every field here
+   * is optional `unknown`, so a wrong name reads as an absent value.
+   */
+  quote?: unknown;
   met?: unknown;
 }
 

@@ -186,7 +186,7 @@ The buyer is on the order screen while Guardian is still reviewing. They do noth
 **Loading, failure, and live behaviour**
 
 - **FR-031**: When the order is ruled on while the screen is open, the card MUST appear without a refresh or a click; when settlement subsequently completes, the card MUST update in place rather than rebuilding.
-- **FR-032**: On an order that is already settled when the screen loads, the complete card MUST render without a visible intermediate state that omits the ruling.
+- **FR-032**: On an order that is already settled when the screen loads, the ruling is fetched as a second request gated on the order's state, so the screen MUST show a **labelled** loading line in the concluded region while it arrives — never a blank region, and never a card that appears complete while the ruling is still missing. *(Amended post-build to describe what ships. The original wording forbade any intermediate state, which would require prefetching the verdict from the route's order id in parallel. That was rejected: research R6 keeps the verdict off the 1s order poll, and a briefly labelled line is a smaller cost than putting an immutable row on a one-second schedule.)*
 - **FR-033**: Once the ruling and its settlement are final, the screen MUST NOT continue repeated background reads of them.
 - **FR-034**: A failure to load the ruling MUST be reported in place with a retry, and MUST NOT leave the concluded region blank.
 - **FR-035**: A failure to load the case file MUST be reported within its own panel with a retry and MUST NOT prevent the verdict card from rendering, and vice versa.

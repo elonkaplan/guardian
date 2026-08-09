@@ -72,7 +72,7 @@ const Verdict = z.object({
   tier: z.enum(["0", "25", "50", "75", "100"]),
   reasoning: z.string(),
   citations: z.array(z.object({
-    source: z.enum(["listing_promise", "listing_exclusion", "acceptance_criterion"]),
+    source: z.enum(["capability", "exclusion", "criterion"]),
     quote:  z.string(),
     met:    z.boolean(),
   })),

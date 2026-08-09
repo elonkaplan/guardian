@@ -249,8 +249,11 @@ function normaliseCitations(value: unknown): { citations: Citation[]; unreadable
 function normaliseCitation(raw: RawCitation): Citation {
   return {
     source: normaliseSource(raw.source),
-    clause:
-      typeof raw.clause === 'string' && raw.clause.trim() !== '' ? raw.clause : null,
+    // Wire field is `quote` (api/docs/specs/API-09 · tech-stack §5); the rendered
+    // field is `clause`. The rename happens here and nowhere else — reading
+    // `raw.clause` would silently null every citation, because RawCitation's
+    // fields are optional `unknown` and a wrong name is not a type error.
+    clause: typeof raw.quote === 'string' && raw.quote.trim() !== '' ? raw.quote : null,
     status: normaliseStatus(raw.met),
   };
 }
