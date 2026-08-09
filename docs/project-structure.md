@@ -44,6 +44,23 @@ The docs specify a fork that "incorporates Monad gas pricing and precompiles."
 Upstream Foundry will mis-price gas locally — which, given §1.1, is exactly the
 thing we can't afford to guess at.
 
+**Now measured, on the real escrow deploy.** The fork submits the simulated gas as the
+transaction's limit **with no padding**: limit 2,406,060 against gas used 2,406,060,
+identical to the unit, and the deployer's balance fell by exactly `gas × price`
+(0.2594 MON at 107.8 gwei). Upstream's `--gas-estimate-multiplier` defaults to 130, and
+under §1.1 that 30% is spent rather than reserved — so the wrong toolchain is a standing
+~30% tax on every transaction, silently, with no error to notice. That is the concrete
+cost of the trap in the next paragraph.
+
+**How to tell which one you have:** the fork installs to `~/.foundry/bin` — the *same*
+path as upstream, with the same binary names and no `forge-monad`. Nothing announces the
+swap. `forge --version` must contain `-monad-` (e.g. `1.7.1-monad-v1.0.0`); that string
+is the only reliable discriminator.
+
+One residual: the `Estimated amount required` figure printed before broadcasting is
+quoted at a conservative gas price and runs roughly double the actual charge. It's a
+funding check, not a bill.
+
 Hardhat isn't mentioned in Monad's tooling docs at all. **Foundry it is**, even
 though the rest of the stack is TypeScript.
 
@@ -248,10 +265,11 @@ Deploys the escrow and wires the two roles from env:
 ```solidity
 contract Deploy is Script {
     function run() external {
-        uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");
-        address token    = vm.envAddress("USDC_ADDRESS");
-        address operator = vm.envAddress("OPERATOR_ADDRESS");
-        address guardian = vm.envAddress("GUARDIAN_ADDRESS");
+        uint256 pk       = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0));
+        address token    = vm.envOr("USDC_ADDRESS",     address(0));
+        address operator = vm.envOr("OPERATOR_ADDRESS", address(0));
+        address guardian = vm.envOr("GUARDIAN_ADDRESS", address(0));
+        _requireAllSet(pk, token, operator, guardian);  // names every bad one at once
 
         vm.startBroadcast(pk);
         GuardianEscrow escrow = new GuardianEscrow(
@@ -259,13 +277,34 @@ contract Deploy is Script {
         );
         vm.stopBroadcast();
 
-        console2.log("ESCROW_CONTRACT_ADDRESS=", address(escrow));
+        console2.log(string.concat(
+            "ESCROW_CONTRACT_ADDRESS=", vm.toString(address(escrow))
+        ));
     }
 }
 ```
 
+**Why `vm.envOr` and not `vm.envUint` / `vm.envAddress`:** the direct accessors abort
+on the *first* bad value and say nothing about the rest, so a reader with three blank
+fields discovers them one deploy attempt at a time. `vm.envOr` doesn't abort — it
+returns the default for both missing *and* malformed values, which is the only way the
+script gets to see all four before deciding to stop. The tradeoff is that it can't tell
+"absent" from "malformed", so the revert message says *missing or malformed*; that costs
+the reader nothing, since either way the fix is the same line of `.env`.
+
 Printing the address in `.env` format is deliberate — deploy, copy one line, paste.
-At 3am that's one less transcription error.
+At 3am that's one less transcription error. The `string.concat` is load-bearing:
+`console2.log` joins its arguments with a space, so the comma form emits a space after
+the `=`, which is not a format `.env` parses and defeats the whole point of the step.
+
+```
+  A_COMMA_STYLE= 0x534b2f3A21130d7a60830c2Df862319e593943A3
+  B_CONCAT_STYLE=0x534b2f3A21130d7a60830c2Df862319e593943A3
+```
+
+(`forge` indents script logs by two spaces. Select from the `E` of `ESCROW`, not from
+column zero — though every dotenv reader in the stack tolerates leading whitespace, so
+a sloppy grab still works.)
 
 ### 4.3 The deploy runbook
 
@@ -275,20 +314,38 @@ At 3am that's one less transcription error.
 
 # 2. Fund the deployer with MON from faucet.monad.xyz
 
-# 3. Deploy
+# 3. Export the shared .env into this shell — run from sc/, and stay in this shell
+set -a; . ../.env; set +a
+
+# 4. Deploy
 forge script script/Deploy.s.sol \
   --rpc-url $MONAD_RPC_URL \
   --broadcast
 
-# 4. Paste ESCROW_CONTRACT_ADDRESS into ../.env
+# 5. Paste ESCROW_CONTRACT_ADDRESS into ../.env, then re-run step 3 so the
+#    new address is in the shell for step 6
 
-# 5. Approve the escrow to pull from the operator pool  ← easy to forget
+# 6. Approve the escrow to pull from the operator pool  ← easy to forget
 cast send $USDC_ADDRESS \
   "approve(address,uint256)" $ESCROW_CONTRACT_ADDRESS <large> \
   --rpc-url $MONAD_RPC_URL --private-key $OPERATOR_PRIVATE_KEY
 ```
 
-**Step 5 is the one that bites.** `openDeal` pulls tokens from the operator via
+**Step 3 is not optional, and it is the one everybody skips.** Foundry loads `.env`
+from the Foundry project root — that's `sc/` — and does *not* walk up to parent
+directories. Guardian's `.env` lives at the repository root, shared by `api/`, `ui/`
+and `sc/`. So the obvious way to run this, `cd sc && forge script …`, reads **none** of
+the configuration and dies on the first `vm.env*` call. There is no `--env-file` flag on
+`forge script`. Sourcing into the shell fixes both tools at once — `cast send` in step 6
+needs the same values, and a `sc/.env → ../.env` symlink (the other obvious fix) does
+nothing for `cast`.
+
+**Private keys need the `0x` prefix** for `vm.envUint`, which rejects bare hex with
+`missing hex prefix ("0x")`. `cast --private-key` accepts bare hex quite happily, so the
+same key can pass step 6 and fail step 4 — which reads as a broken deploy script rather
+than a formatting problem. See `.env.example`.
+
+**Step 6 is the one that bites.** `openDeal` pulls tokens from the operator via
 `transferFrom`, which fails without an allowance — and the failure surfaces as a
 revert on the *first purchase*, long after deployment appeared to succeed.
 
