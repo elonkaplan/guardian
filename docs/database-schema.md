@@ -226,15 +226,40 @@ Displaying "in escrow" needs no new table — it's
 under their own control, *not* back in their spendable balance — so re-buying means
 onramping again.
 
-That would have been awkward for Act 3's retry-after-refund beat, but **Act 3 is
-cut** (§2.1), so nothing in the demo touches it. Recording it because it's the kind
-of thing that looks like a bug later if nobody wrote down that it was a choice.
+The **retry-after-refund** beat this would have made awkward belongs to Act 3′, the
+autonomous variant, which is cut (§2.1) — nothing re-buys after a refund.
+
+**But Act 3 itself is in the demo** (product-workflow §5.3), and it ends in a 100%
+refund. So this consequence is now *on screen*: the buyer gets the full price back
+and **their available balance does not move**, because the money lands in settled
+funds, on-chain, under their own address. A presenter saying "and the money comes
+back" beside an unchanged balance looks like a failure.
+
+That is precisely what the Wallet page's third figure is for — `settledFundsMinor`
+(api-design §3.2.1). Act 3 is the act that makes the two-numbers rule legible instead
+of pedantic: without it, the demo's cleanest verdict appears to pay nobody.
 
 The off-chain analogue of the solvency invariant (smart-contract §3.3):
 
 ```
 operator pool token balance  >=  Σ all platform ledger balances
 ```
+
+**The `>=` decides the write order of every two-phase money flow.** A crash between
+the halves must leave the pool holding *more* than the ledger claims, never less, so
+**whichever write increases what we owe goes second**:
+
+| Flow | Ledger | Chain | Order | A crash leaves |
+| --- | --- | --- | --- | --- |
+| Purchase | ↓ | ↓ into escrow | Postgres first | ledger down, pool flat ✅ |
+| Cash-out | ↓ | ↓ pool → funder | Postgres first | ledger down, pool flat ✅ |
+| **Top-up** | ↑ | ↑ funder → pool | **chain first** | pool up, ledger flat ✅ |
+
+Top-up is the only flow where the ledger side increases, and so the only one where
+the backend's usual "Postgres first, chain second" heuristic (`api/docs/CONTEXT.md`
+invariant #1) is the wrong way round — crediting a balance before the tokens land
+promises money the pool does not hold. The heuristic is a consequence of this rule,
+not the rule.
 
 ---
 

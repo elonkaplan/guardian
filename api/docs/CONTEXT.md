@@ -30,8 +30,22 @@ below exist to keep that trust narrow and visible.
 
 ## 2. Nine invariants — break these and something subtle goes wrong
 
-1. **Postgres first, chain second.** A bad DB write is trivial to compensate; a
-   stray on-chain deal is not. Every two-phase flow has an explicit failure branch.
+1. **Order two-phase money flows so a crash leaves the pool over-funded.** The
+   solvency invariant is `operator pool >= Σ ledger balances` (database-schema §3.3)
+   — note the `>=`. **Whichever write increases what we owe goes second.**
+
+   | Flow | Ledger | Chain | Order |
+   | --- | --- | --- | --- |
+   | Purchase | ↓ | ↓ into escrow | Postgres first |
+   | Cash-out | ↓ | ↓ pool → funder | Postgres first |
+   | **Top-up** | ↑ | ↑ funder → pool | **chain first** |
+
+   In practice that reads as **"Postgres first, chain second"** for everything that
+   *reduces* the ledger, which is most of it — a bad DB write is trivial to
+   compensate, a stray on-chain deal is not. **Top-up is the one flow that inverts**,
+   because crediting before the tokens land promises money the pool does not hold.
+   Do not apply the short version to a flow that increases a balance. Every two-phase
+   flow has an explicit failure branch.
 2. **One money unit in the database: USD cents.** Token base units (6 decimals)
    exist **only** inside `chain/`. One `× 10⁴` conversion, one file.
 3. **`system_prompt` never reaches a buyer** — and the boundary is wider than one
