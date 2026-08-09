@@ -150,16 +150,20 @@ the transaction hash.
 
 ### 0:44 — Act 3 · PolyglotAI · expect `full` (100%)
 
-**`targetLanguage`** → `German`
+⚠️ **This one is a single JSON textarea, not form fields.** `preserveTerms` is an array
+and the form builder only lays out flat schemas, so it falls back to raw JSON — by
+design, not a bug. Paste the whole object:
 
-**`preserveTerms`** → `NordWind`, then `AeroDock Pro` — **in that order.** Array order is
-part of the key.
-
-**`text`** → paste exactly:
-
+```json
+{
+  "targetLanguage": "German",
+  "preserveTerms": ["NordWind", "AeroDock Pro"],
+  "text": "The AeroDock Pro is NordWind's compact USB-C docking station for hybrid desks. It drives two 4K displays at 60Hz, delivers 100W of charging over a single cable, and adds Gigabit Ethernet, three USB-A ports and an SD card reader. The aluminium housing runs cool without a fan, and the detachable stand lets it sit flat or upright."
+}
 ```
-The AeroDock Pro is NordWind's compact USB-C docking station for hybrid desks. It drives two 4K displays at 60Hz, delivers 100W of charging over a single cable, and adds Gigabit Ethernet, three USB-A ports and an SD card reader. The aluminium housing runs cool without a fan, and the detachable stand lets it sit flat or upright.
-```
+
+Object key order is free — the canonical form sorts keys. **Array order is not:**
+`NordWind` before `AeroDock Pro`.
 
 **Acceptance criteria:**
 
