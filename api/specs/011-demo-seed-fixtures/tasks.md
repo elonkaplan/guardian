@@ -67,8 +67,8 @@ description: "Task list for 011-demo-seed-fixtures"
 - [X] T016 [US1] Implement `POST /demo/seed` in `src/demo/demo.controller.ts` — `@Public()`, no body, returns `200` (not `201`: the call is idempotent and usually creates nothing).
 - [X] T017 [US1] Map the seed errors to responses in the controller/filter per contracts §1.2, reusing the existing chain-error mapping for `502`.
 - [X] T018 [US1] Wire `DemoSeedService` and `DemoController` into `src/demo/demo.module.ts`.
-- [ ] T019 [US1] ★ **Verify by purchasing, not by reading** ([quickstart §2](./quickstart.md)): seed an empty database, buy once from each of the three, and confirm three runs exist and no log line contains `'additionalProperties' must be explicitly set to false`. A definition that reads correctly and is refused at execution is the failure this task exists to catch (FR-036).
-- [ ] T020 [US1] Verify idempotency and the public catalogue: re-seed → three `created: false`, `agents` count still 3, and `GET /agents` shows all three with non-null on-chain ids ([quickstart §1](./quickstart.md), SC-010).
+- [X] T019 [US1] ★ **Verify by purchasing, not by reading** ([quickstart §2](./quickstart.md)): seed an empty database, buy once from each of the three, and confirm three runs exist and no log line contains `'additionalProperties' must be explicitly set to false`. A definition that reads correctly and is refused at execution is the failure this task exists to catch (FR-036).
+- [X] T020 [US1] Verify idempotency and the public catalogue: re-seed → three `created: false`, `agents` count still 3, and `GET /agents` shows all three with non-null on-chain ids ([quickstart §1](./quickstart.md), SC-010).
 
 **Checkpoint**: A working three-agent marketplace. No fixture fires yet — every purchase runs live, which is correct and observable.
 
@@ -91,8 +91,8 @@ description: "Task list for 011-demo-seed-fixtures"
 - [X] T025 [US2] Write Act 2's fixture in `src/demo/fixtures.ts`, verbatim from [contracts/fixtures.md](./contracts/fixtures.md): the five-item euro receipt, the acceptance criteria, the complaint, and the `{ kind: 'output' }` script returning **three** line items with `total: 300.00`.
 - [X] T026 [US2] ⚠️ Check Act 2's acceptance criteria mention **nothing about dollars or conversion** — the currency grievance belongs only in the complaint, where it is unfounded. In the criteria it becomes something the buyer legitimately asked for and the tier moves (research R9).
 - [X] T027 [US2] Populate `fixtures[]` in the seed response from the same `fixtures.ts` objects that were registered, so published and registered content cannot drift (FR-028, research R8).
-- [ ] T028 [US2] Verify ([quickstart §3](./quickstart.md)): buy the fixture five times; exactly three line items each time, the same three, `total: 300.00` against the receipt's printed `362.00`, and `Desk lamp` / `Cable kit` nameable from the receipt (SC-003, FR-017, FR-019).
-- [ ] T029 [US2] ★ Verify the fixture does **not** fire on anything else ([quickstart §9](./quickstart.md)): a different receipt, and the same receipt with one character changed, both produce a live extraction (FR-024, SC-008).
+- [X] T028 [US2] Verify ([quickstart §3](./quickstart.md)): buy the fixture five times; exactly three line items each time, the same three, `total: 300.00` against the receipt's printed `362.00`, and `Desk lamp` / `Cable kit` nameable from the receipt (SC-003, FR-017, FR-019).
+- [X] T029 [US2] ★ Verify the fixture does **not** fire on anything else ([quickstart §9](./quickstart.md)): a different receipt, and the same receipt with one character changed, both produce a live extraction (FR-024, SC-008).
 
 **Checkpoint**: Act 2 is deterministic and countable. The demo's centrepiece exists.
 
@@ -109,7 +109,7 @@ description: "Task list for 011-demo-seed-fixtures"
 - [X] T030 [US3] Write Act 1's fixture in `src/demo/fixtures.ts`, verbatim from [contracts/fixtures.md](./contracts/fixtures.md): the 259-word memo as `document`, `wordCap: 100`, the acceptance criteria, the complaint, and the `{ kind: 'output' }` script with the 85-word summary and `wordCount: 85`.
 - [X] T031 [US3] ⚠️ Re-count the summary after writing it (`jq -r '.summary' | wc -w`) and confirm it is **85**, matching the declared `wordCount`. A declared count that disagrees with the text hands the complaining buyer a real grievance and inverts the act.
 - [ ] T032 [US3] ★ Have someone who did not write it read the summary and confirm it covers the pricing change. **This is the check, not the word count** (FR-015) — if it has drifted, a 0% ruling stops being a fairness demonstration and becomes a visible misfire.
-- [ ] T033 [US3] Verify ([quickstart §4](./quickstart.md)): buy the fixture, confirm `wordCount: 85`, an actual count of 85, and 85 < the buyer's cap of 100 (SC-004).
+- [X] T033 [US3] Verify ([quickstart §4](./quickstart.md)): buy the fixture, confirm `wordCount: 85`, an actual count of 85, and 85 < the buyer's cap of 100 (SC-004).
 
 **Checkpoint**: The demo's opening argument holds up.
 
@@ -125,8 +125,8 @@ description: "Task list for 011-demo-seed-fixtures"
 
 - [X] T034 [US4] Write Act 3's fixture in `src/demo/fixtures.ts`, verbatim from [contracts/fixtures.md](./contracts/fixtures.md): the product description, `targetLanguage: "German"`, `preserveTerms`, the criteria, the complaint, and the `{ kind: 'failure', message }` script.
 - [X] T035 [US4] ⚠️ Confirm no code in `src/demo/` writes an order state, a run row, or a verdict. The crash must be thrown by `ScriptedAgentRunner` and travel the ordinary path — a seeded shortcut removes the very thing Guardian reads (FR-022, invariant #7).
-- [ ] T036 [US4] Verify ([quickstart §7](./quickstart.md)): order `failed`, `runs.output` **SQL NULL and not `{}`**, `runs.error` set, `output_valid` NULL, and **no chain call made** (FR-021, SC-005).
-- [ ] T037 [US4] Verify array-order sensitivity ([quickstart §9](./quickstart.md)): sending `preserveTerms` reversed produces a live run, because array order is part of the input's identity (research R8).
+- [X] T036 [US4] Verify ([quickstart §7](./quickstart.md)): order `failed`, `runs.output` **SQL NULL and not `{}`**, `runs.error` set, `output_valid` NULL, and **no chain call made** (FR-021, SC-005).
+- [X] T037 [US4] Verify array-order sensitivity ([quickstart §9](./quickstart.md)): sending `preserveTerms` reversed produces a live run, because array order is part of the input's identity (research R8).
 
 **Checkpoint**: All three fixtures exist and behave. The acts can be run end to end.
 
@@ -147,9 +147,9 @@ description: "Task list for 011-demo-seed-fixtures"
 - [X] T042 [US5] Count `ordersInFlight` — orders deleted whose state was `purchased`, `running`, `delivered`, `disputed` or `adjudicated` — read **before** the delete, since afterwards there is nothing to count (FR-032).
 - [X] T043 [US5] Implement `POST /demo/reset` in `src/demo/demo.controller.ts` — `@Public()`, no body, `200`, no environment guard (recorded decision, `docs/api-design.md` §8).
 - [X] T044 [US5] Wire `DemoResetService` into `src/demo/demo.module.ts`.
-- [ ] T045 [US5] ★ Verify the ledger is whole ([quickstart §10](./quickstart.md)): the buyer's `SUM(amount_minor)` is **identical** before and after, `ledger_entries` count unchanged, and `kind='purchase' AND order_id IS NOT NULL` returns 0 (FR-031, SC-012).
-- [ ] T046 [US5] Verify repetition and emptiness: reset on a system with no orders → `200`, all counts `0`; reset twice → the second clears nothing and succeeds (FR-033).
-- [ ] T047 [US5] Verify mid-act behaviour ([quickstart §11](./quickstart.md)): reset while the execution poller is claiming → at most one foreign-key error in the log, no crashed process, `runs` count `0`, and the next purchase works (FR-034, SC-013).
+- [X] T045 [US5] ★ Verify the ledger is whole ([quickstart §10](./quickstart.md)): the buyer's `SUM(amount_minor)` is **identical** before and after, `ledger_entries` count unchanged, and `kind='purchase' AND order_id IS NOT NULL` returns 0 (FR-031, SC-012).
+- [X] T046 [US5] Verify repetition and emptiness: reset on a system with no orders → `200`, all counts `0`; reset twice → the second clears nothing and succeeds (FR-033).
+- [X] T047 [US5] Verify mid-act behaviour ([quickstart §11](./quickstart.md)): reset while the execution poller is claiming → at most one foreign-key error in the log, no crashed process, `runs` count `0`, and the next purchase works (FR-034, SC-013).
 
 **Checkpoint**: The rehearsal loop is closed. All five stories complete.
 
@@ -159,11 +159,11 @@ description: "Task list for 011-demo-seed-fixtures"
 
 **Purpose**: The checks that only exist across stories, plus the two documentation lines this feature owes an operator.
 
-- [ ] T048 ★ **Restart check** ([quickstart §8](./quickstart.md)): restart the API without re-seeding and buy Act 2's fixture. Three line items, not five. Confirm the three `registered demo script:` lines appear on every boot, seeded database or not. **This is the only silent failure in the feature** (FR-026, SC-009).
-- [ ] T049 ★ **Run all three acts end to end** ([quickstart §5–§7](./quickstart.md)): tiers `none`, `half`, `full`; the $1.00/$1.00 split confirmed on-chain rather than in the database. Acts 1 and 2 have never run before this task (SC-006).
-- [ ] T050 ★ **Confirm an exclusion is cited** ([quickstart §6](./quickstart.md)): Act 2's ruling carries a citation with `source: "exclusion"` quoting the currency clause. An exclusion the demo claims and never shows is what FR-020 and SC-007 exist for.
-- [ ] T051 ★ **Rehearse twice** ([quickstart §12](./quickstart.md)): reset, run all three acts again, same three tiers. These are fresh rulings, not replays — a differing tier means that fixture's case file is ambiguous, and the fix is in the fixture (FR-027, FR-037, SC-006).
-- [ ] T052 [P] Verify the disclosure boundary ([quickstart §13](./quickstart.md)): neither route's response contains any seeded `systemPrompt` text (FR-010, SC-011).
+- [X] T048 ★ **Restart check** ([quickstart §8](./quickstart.md)): restart the API without re-seeding and buy Act 2's fixture. Three line items, not five. Confirm the three `registered demo script:` lines appear on every boot, seeded database or not. **This is the only silent failure in the feature** (FR-026, SC-009).
+- [X] T049 ★ **Run all three acts end to end** ([quickstart §5–§7](./quickstart.md)): tiers `none`, `half`, `full`; the $1.00/$1.00 split confirmed on-chain rather than in the database. Acts 1 and 2 have never run before this task (SC-006).
+- [X] T050 ★ **Confirm an exclusion is cited** ([quickstart §6](./quickstart.md)): Act 2's ruling carries a citation with `source: "exclusion"` quoting the currency clause. An exclusion the demo claims and never shows is what FR-020 and SC-007 exist for.
+- [X] T051 ★ **Rehearse twice** ([quickstart §12](./quickstart.md)): reset, run all three acts again, same three tiers. These are fresh rulings, not replays — a differing tier means that fixture's case file is ambiguous, and the fix is in the fixture (FR-027, FR-037, SC-006).
+- [X] T052 [P] Verify the disclosure boundary ([quickstart §13](./quickstart.md)): neither route's response contains any seeded `systemPrompt` text (FR-010, SC-011).
 - [X] T053 [P] Document both routes in `README.md` — what they do, that **reset is unguarded and unauthenticated**, and that it does not return spent balance (FR-011, FR-031).
 - [X] T054 [P] Add a short "running the demo" section to `README.md`: seed, copy the fixtures from the response, run the three acts in order, reset between rehearsals, and top up when balance runs low.
 - [X] T055 Record a verification run at the bottom of this file — what passed, what remains, and any finding for the next feature — following the format the 008 and 009 task lists use.
@@ -241,86 +241,87 @@ US1 → US5 → US2 → US3 → US4. Reset early is worth its place out of prior
 
 ---
 
-## Verification run — 2026-08-09 (offline only)
 
-**The code is complete; the live run has not happened.** Every task that can be verified
-without a running stack was, and 39 of 55 are checked. The 16 open tasks all require
-purchasing from the seeded agents, which needs a database, the operator key, and real
-`registerAgent` transactions.
+## Verification run — 2026-08-09 (live)
 
-### ⚠️ Why the live half stopped
+**54 of 55 tasks pass. The one that remains needs a person, not a stack.** The
+offline pass recorded earlier that day was superseded by a full live run against
+a real database, the operator key on Monad, and real model calls. Every ★ task in
+the list has now been exercised end to end, including the three that had never
+run before: Acts 1 and 2, and the restart check.
 
-The Docker stack on this machine (`api-api-1`, `api-postgres-1`, ports 3000 and 5433)
-is serving **a different working copy** — `docker inspect` shows its `/app/src` bind-mounted
-from `rain-hackathon/guardian/api`, not from this clone. Compose derives its project name
-from the directory (`api`), so both copies collide on the same project, the same container
-names and the same ports: `docker compose up` here would recreate that stack against this
-source tree and disrupt whoever is using it.
+The scripts are committed alongside this file and are re-runnable:
 
-Standing up an isolated stack is possible (`-p` with a distinct project name and different
-host ports) but it is not free of side effects: a seed mints **three new on-chain agents**
-from the operator key on Monad, and the acts spend real Anthropic calls. That is a decision
-for the operator, not something to do quietly in the middle of an implementation.
-
-### What passed, offline
-
-| Check | Result |
+| Script | Covers |
 | --- | --- |
-| `tsc --noEmit` across the project | ✅ clean |
-| `nest build` | ✅ clean |
-| T007 — `additionalProperties: false` on every object in all six seeded schemas | ✅ verified by walking each schema, including the nested `lineItems.items` |
-| T031 ★ — Act 1's summary is **85 words**, `wordCount` declares **85**, cap is 100 | ✅ counted from the actual string, not the contract doc |
-| Act 1's summary mentions the pricing change | ✅ (see the caveat under T032 below) |
-| T026 ⚠️ — Act 2's acceptance criteria mention no currency/conversion; the **complaint** does | ✅ both directions asserted |
-| Act 2's script returns 3 line items; `total` (300.00) equals the sum of the three | ✅ and the receipt prints 362.00 |
-| Every fixture's input keys match its agent's `inputSchema` properties | ✅ 3/3 |
-| T023 ★ — **the registry key matches what the runner will look up** | ✅ registered with `.slice(2)`, then looked up with the hash round-tripped through a `Buffer` exactly as `execution.repository.ts` produces it → **3/3 HIT** |
-| The `0x`-prefixed form **misses** | ✅ — which is the whole reason `.slice(2)` is there |
-| One character changed in the receipt → miss | ✅ |
-| A stranger's receipt → miss | ✅ |
-| Right input, someone else's definition hash → miss | ✅ |
-| `preserveTerms` reversed → miss | ✅ array order is part of the input's identity |
-| Object keys in another order → **hit** | ✅ key order is free, as designed |
-| T008 — guard throws with a correct JSON pointer | ✅ 14 cases (root omission, `lineItems.items`, `$defs`, `anyOf`, `prefixItems`, tuple `items`, `patternProperties`, pointer escaping) |
-| T035 ⚠️ — no code in `src/demo/` writes an order state, run row or verdict | ✅ the only writes to those tables are the reset's four `DELETE`s |
-| T052 (structural half) — no `systemPrompt` field exists in any demo response type | ✅ |
-| DI wiring | ✅ static check: every injected provider is exported by an imported module (`AgentWritesService`/`AgentRepository` newly exported from `CatalogModule`; `AccountRepository`; `DemoScriptRegistry`), `ConfigService` is global, `DataSource` comes from `TypeOrmModule.forRoot` |
+| `scripts/verify-011-seed.mjs` | §1, §13 — seeding, idempotency, catalogue, disclosure |
+| `scripts/verify-011-fixtures.mjs` | §2, §3, §4, §7, §9 — the fixtures fire, and only on their own input |
+| `scripts/verify-011-acts.mjs` | §5–§7 — the three acts to a settled ruling, split confirmed on-chain |
+| `scripts/verify-011-reset.mjs` | §10, §11 — the ledger survives, and the mid-act race |
+| `scripts/verify-011-restart.mjs` | §8 — the silent one |
 
-The offline registry check is the one worth keeping: it proves the exact failure mode the
-plan was most worried about — a fixture that registers cleanly and never fires — cannot
-happen for these three definitions, without needing a database to prove it.
+### Results
 
-### What remains — all 16 need a live stack
+| Section | Script result | Notes |
+| --- | --- | --- |
+| §1, §13 — seed, idempotency, disclosure | **42/42** | Minted on-chain agents **#17, #18, #19**. Re-seed → three `created: false`, still 3 agents and 3 versions, same ids |
+| §2 ★ — every seeded agent actually runs | ✅ | Acts 1 and 2 `delivered`, Act 3 `failed`. **No `additionalProperties` error and no `DefinitionUnusableError` anywhere in the logs** — the failure the execution engine's run hit on all thirteen orders did not recur |
+| §3 ★ — Act 2 is countable | ✅ | Five purchases, **five identical results**: the same three items, in the same order, `total: 300.00` against the receipt's printed `362.00`. `Desk lamp` and `Cable kit` absent from every one and printed on the receipt |
+| §4 — Act 1's numbers | ✅ | Declared `wordCount: 85`, actual count **85**, under the buyer's cap of 100 |
+| §7 ★ — Act 3's absence | ✅ | `runs.output` **SQL NULL, not `{}`**; `runs.error` set; `output_valid` NULL; exactly one run row |
+| §9 ★ — the fixture fires on its input alone | ✅ | A stranger's receipt → a genuine two-item extraction. The fixture receipt with **one character changed** → live. `preserveTerms` reversed → live |
+| §5–§7 ★ — three acts, end to end | **33/33 ×2 clean** | `none` / `half` / `full`, three passes running |
+| §6 ★ — the cited exclusion | ✅ | Act 2's ruling cites `source: "exclusion"` quoting *"Does not convert between currencies or restate amounts in another currency."* |
+| §6 ★ — the split, **on-chain** | ✅ | Escrow `balances()` read directly: seller **+200¢**, buyer **+250¢** per pass. Act 2 is a clean $1.00/$1.00 |
+| §10 ★ — reset keeps the ledger whole | **29/29** | Cleared 46 orders / 37 runs / 7 complaints / 7 verdicts. `ledger_entries` **74 before and 74 after**, total sum **3350 before and after**, and *every per-account balance identical*. `kind='purchase' AND order_id IS NOT NULL` → 0 while the purchase rows themselves survive |
+| §11 — reset mid-act | ✅ | `200` with `ordersInFlight: 1`, **zero** foreign-key errors, no crash, `runs` count 0, and the next purchase delivered with the fixture still firing |
+| §8 ★ — the restart | **11/11** | Restarted **without re-seeding**; three `registered demo script:` lines on that boot; Act 2 returned **three** line items, not five |
+| §12 ★ — repeated rehearsals | ✅ | Three passes, `none` / `half` / `full` every time. Fresh rulings each pass — reset deleted the verdicts, so the auditor decided all three again |
 
-- **T019, T020** — seed an empty database; purchase from all three; confirm no
-  `DefinitionUnusableError`. **This is the gate**: it is the failure the execution engine's
-  verification run already found once, and no amount of local validation substitutes for it.
-- **T028, T029** — Act 2 delivers 3 of 5 across five runs; a stranger's receipt gets a live
-  extraction. *(The registry-level halves of both are proven above; what is untested is the
-  purchase path around them.)*
-- **T032** ⚠️ — **an independent reader confirms Act 1's summary covers the pricing change.**
-  Deliberately left unchecked: the task asks for someone who did not write the fixture, and
-  the fixture's author cannot be that person. A regex found the word; that is not the check.
-- **T033, T036, T037** — Act 1 and Act 3 through a real purchase; `runs.output` SQL NULL.
-- **T045, T046, T047** — reset against a populated database: ledger sum identical before and
-  after, repetition, and the mid-act race.
-- **T048** ★ — the restart check. Still the only silent failure in the feature.
-- **T049, T050, T051** — the three acts end to end, the cited exclusion, and two rehearsals
-  reaching the same three tiers. **Acts 1 and 2 have still never run**, which is what the
-  audit engine's verification named as its largest gap.
-- **T052** (live half) — `curl` both routes and confirm no prompt text in either response.
+### The one task still open
 
-### Finding: the demo seller account is created by an unauthenticated route
+- **T032** ⚠️ — **an independent reader confirms Act 1's summary covers the pricing
+  change.** Left unchecked deliberately, for the same reason the offline pass left
+  it: the task asks for someone who did not write the fixture, and neither the
+  fixture's author nor the agent that has now read it a dozen times is that person.
+  Everything a machine can check about Act 1 passes — 85 declared, 85 counted, under
+  the cap, and the ruling has come back `none` with the buyer's own word cap cited
+  back at them on three separate audits. That last fact is the strongest available
+  evidence that the summary does cover the pricing change, because an auditor that
+  disagreed would have moved the tier. It is still not a human reading it.
 
-`POST /demo/seed` calls `AccountRepository.findOrCreateByAddress()`, so a stranger hitting
-the route on a deployed instance creates the demo seller account if it does not exist. This
-is judged acceptable and is not a defect in this feature: the address is operator-configured
-rather than caller-supplied, the account holds no balance, and the same row would be created
-by the first legitimate seed. Worth naming rather than leaving for someone to rediscover
-while reading the route's `@Public()`.
+### Findings
 
-### Note for whoever runs the live pass
+**1. The verdict's `met` flag reads the opposite way round from the obvious guess,
+on exclusions.** Act 2's cited exclusion comes back `met: true`, and that is the
+grievance being **rejected**, not upheld: `met` means "the delivery met this
+clause" (`verdict-response.dto.ts`), so an honoured exclusion protects the seller.
+A verification script asserting `met === false` for a rejected complaint will fail
+against correct behaviour. Named here because it cost a re-run.
 
-`node_modules` was installed in this clone (`npm ci`) to make the typecheck and build
-possible; it was absent before. Nothing else about the environment was changed, and no
-container was started, stopped or rebuilt.
+**2. `GET /orders/:id` nests the delivery under `run`, not at the top level** —
+`order.run.output`, per `toOrderRun` in `order-serialiser.ts`. quickstart §3 and §4
+write it as `order <id> | jq '.output'`, which yields `null` and reads exactly like
+a fixture that failed to fire. The quickstart's shorthand is worth correcting the
+next time that file is touched.
+
+**3. The demo seller account is created by an unauthenticated route** — carried
+forward unchanged from the offline pass. `POST /demo/seed` calls
+`findOrCreateByAddress`, so a stranger hitting the route on a deployed instance
+creates the demo seller if absent. Still judged acceptable: the address is
+operator-configured rather than caller-supplied, the account holds no balance, and
+the same row would be created by the first legitimate seed.
+
+### What the run changed on this machine, and what it did not
+
+- **Minted three on-chain agents** (#17, #18, #19) from the operator key. Irreversible
+  by design — `registerAgent` mints a new id on every call.
+- **Deleted the 46 orders, 37 runs, 7 complaints and 7 verdicts** that existed from the
+  008–010 verification runs, via `POST /demo/reset`. Approved before the run. No
+  account, agent or ledger entry was touched.
+- `REVIEW_WINDOW_SECONDS` was raised to 600 for the duration so a complaint could be
+  filed before the sweeper released, then **restored to 30** and the file diffed
+  against a backup to confirm it matches.
+- The API container was recreated to pick up `DEMO_SELLER_ADDRESS`, which had been
+  added to `.env` after the container was last created. It had been failing config
+  validation on boot and was down before this run started.

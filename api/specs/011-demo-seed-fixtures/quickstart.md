@@ -141,8 +141,12 @@ one inside `lineItems.items` first, it is the easiest to miss and it fails Act 2
 ## 3. ★ Act 2's output is countable
 
 ```bash
-order <act2-order-id> | jq '.output'
+order <act2-order-id> | jq '.run.output'
 ```
+
+⚠️ **`.run.output`, not `.output`.** The delivery is nested under `run`
+(`toOrderRun` in `order-serialiser.ts`). `.output` yields `null` and reads exactly
+like a fixture that failed to fire.
 
 **Expect exactly**:
 
@@ -161,14 +165,14 @@ items on any run means the fixture did not fire and a live model answered.
 ## 4. ⚠️ Act 1's output — read it, do not count it
 
 ```bash
-order <act1-order-id> | jq -r '.output.summary'
-order <act1-order-id> | jq '.output.wordCount'
+order <act1-order-id> | jq -r '.run.output.summary'
+order <act1-order-id> | jq '.run.output.wordCount'
 ```
 
 | Check | Expected | How |
 | --- | --- | --- |
 | declared count | `85` | `jq` |
-| actual count | `85` | `jq -r '.output.summary' | wc -w` — **they must agree** |
+| actual count | `85` | `jq -r '.run.output.summary' | wc -w` — **they must agree** |
 | under the buyer's cap | 85 < 100 | arithmetic |
 | **covers the pricing change** | **yes** | ★ **read it** |
 
@@ -210,6 +214,12 @@ sleep 20 && verdict <order-id> | jq '{tier, refundMinor, citations}'
 currencies or restate amounts in another currency."* (SC-007). That is the buyer's second
 grievance being rejected while the first still carries the tier. An exclusion the demo claims and
 never shows is the requirement this check exists for.
+
+⚠️ **That citation comes back `met: true`, and `true` is the rejection.** `met` reads *"the
+delivery met this clause"* (`verdict-response.dto.ts`) — the seller stated it does not convert
+currencies, the delivery honoured that, so the currency complaint fails while the missing
+line items still carry the tier. Expecting `met: false` here is asserting that the demo
+misfires.
 
 Confirm the split on-chain rather than in the database:
 
