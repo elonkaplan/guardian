@@ -7,8 +7,8 @@
 
 ## Goal
 
-The catalogue the demo runs on — and the failure modes both acts depend on. This
-spec is where the demo gets *designed*, not just implemented.
+The catalogue the demo runs on — and the failure modes all **three** acts depend on.
+This spec is where the demo gets *designed*, not just implemented.
 
 ## In scope
 
@@ -23,23 +23,34 @@ spec is where the demo gets *designed*, not just implemented.
   each with capabilities, exclusions, input/output schemas, prompt, model
 - `POST /demo/reset` — clears orders, runs, complaints, verdicts (keeps accounts and
   agents)
-- Fixture inputs: the 5-line receipt for Act 2, the summarisable document for Act 1
+- **Three fixture inputs, one per act** (product-workflow §5.5):
+
+  | Act | Agent | Seeded input | Must reliably produce |
+  | --- | --- | --- | --- |
+  | 1 | TLDR Agent | Document + *"under 100 words, must cover the pricing change"* | A valid **~85-word summary that does cover it** |
+  | 2 | LedgerBot | A receipt with **exactly 5** line items | **3 returned, 2 dropped**, the two nameable |
+  | 3 | PolyglotAI | A product description to translate | A **crash returning nothing** → `runs.output IS NULL` |
+
 - Deterministic failure modes:
   - **LedgerBot returns 3 of 5 line items** → the 50% verdict is arithmetic
   - **TLDR Agent returns a valid 85-word summary** covering the required topic → its
     complaint is *correctly rejected*
+  - **PolyglotAI crashes and returns nothing** → non-delivery, the 100% tier
 
 ## Out of scope
 
 **Automated tests of any kind** (MVP decision — see `../CONTEXT.md`). Plus:
 
-Act 3 and PolyglotAI's crash path (agent buyers are deferred — PolyglotAI is seeded
-for catalogue realism only).
+**Act 3′** — the *autonomous* variant of Act 3, where a buying agent files the
+complaint itself. Agent buyers are deferred (product-workflow §5.3). **Act 3 itself
+is in the demo** with a human buyer; only the machine-buyer framing is cut.
 
 ## Acceptance
 
-- A seeded database runs Acts 1 and 2 end to end
+- A seeded database runs **all three acts** end to end
 - Running them **twice produces the same verdicts**
+- **PolyglotAI's crash lands as `runs.output IS NULL` and `state='failed'`** — through
+  the real failure path, not a special case
 - `demo/reset` returns the system to a re-runnable state
 
 ## Watch out for
@@ -51,6 +62,15 @@ for catalogue realism only).
   buyer's own 100-word cap back at them against a declared 85.
 - **The array in LedgerBot's output is what makes Act 2 countable.** Free-text output
   would turn an arithmetic verdict into an opinion.
+- **Act 3's crash must travel the ordinary failure path.** `runs.output IS NULL` is
+  evidence, not an error (`../CONTEXT.md` invariant #7) — it is how non-delivery is
+  proven. A seeded shortcut that writes a verdict directly, or an error row that
+  never reaches `failed`, removes the very thing Guardian reads. The error must also
+  be *recorded*, so the case file shows the crash rather than an empty silence.
+- **Act 1's fixture is the fragile one.** If the seeded summary drifts off the
+  pricing change, the buyer's complaint becomes *valid* and a 0% ruling stops being a
+  fairness demonstration and becomes a visible misfire. Check the fixture, not just
+  the word count.
 - Exclusions matter as much as capabilities — *"does not handle handwritten
   receipts"* is how a seller defends itself, and the demo should show one being
   cited.

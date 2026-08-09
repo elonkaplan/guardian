@@ -294,7 +294,8 @@ execution ends up `failed`.
   **PolyglotAI** ($1.50): full definitions with capabilities, exclusions, input and
   output schemas, prompts
 - `POST /demo/reset` — clears orders/runs/complaints/verdicts between rehearsals
-- Fixture inputs for both acts: the 5-line receipt, the summarisable document
+- Fixture inputs for all three acts: the 5-line receipt, the summarisable document,
+  the input PolyglotAI crashes on
 - Deterministic failure modes: LedgerBot returns 3 of 5 items; TLDR returns a valid
   85-word summary (so its complaint is *correctly rejected*)
 

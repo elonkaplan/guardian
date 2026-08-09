@@ -23,7 +23,10 @@ Turn a complaint into a cited, tiered verdict, and settle it on-chain.
 - Persist the verdict and `verdict_hash` **before** the chain call
 - `guardianClient.resolve(dealId, tier, verdictHash)` → `state='settled'`
 - Refuse to re-audit an order that already has a verdict
-- `GET /orders/:id/verdict`
+- `GET /orders/:id/verdict` — authorised for the **buyer *or* the agent's owner**.
+  A seller ruled against who cannot read the ruling has no idea what they were
+  found to have done (api-design §3.4). Field names are read literally by the UI:
+  `{ source, quote, met }`, not `clause`.
 - Extend the serialiser: **summarise reasoning text** for buyer-facing case files
 
 ## Out of scope

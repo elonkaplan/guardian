@@ -26,9 +26,10 @@ a buyer out of pocket.
    entry
 5. **Dispatch execution** async, return 201
 
-Plus: `GET /orders`, `GET /orders/:id`, `GET /sales`,
-`POST /orders/:id/accept`, `POST /orders/:id/complain`,
-`GET /orders/:id/case-file`.
+Plus: `GET /orders` (buyer's), `GET /sales` (seller's),
+`POST /orders/:id/accept` and `POST /orders/:id/complain` (**buyer only**),
+and two reads authorised for **the buyer *or* the agent's owner**:
+`GET /orders/:id` and `GET /orders/:id/case-file`.
 
 ## Out of scope
 
@@ -42,16 +43,25 @@ Running the agent (API-08), auditing (API-09), the cron jobs (API-10).
 - A forced chain failure leaves the buyer's balance whole
 - Complaining creates the complaint row, calls `dispute`, and moves state
 - The case file is redacted for the buyer and complete for the seller
+- **A seller can open `GET /orders/:id` and `GET /orders/:id/case-file` for a sale
+  they did not buy** — verify as the seller account, not just the buyer
 
 ## Watch out for
 
 - **Step 2 must be a single transaction.** Any gap between the order insert and the
   ledger debit is a window where the same balance is spent twice.
-- **Postgres first, chain second.** A bad DB write is one compensating row; a stray
-  on-chain deal is recoverable only by hand.
+- **Postgres first, chain second** — correct *here* because a purchase reduces the
+  ledger. It is not a universal rule: see `../CONTEXT.md` invariant #1, which orders
+  every two-phase flow so a crash leaves the pool holding more than the ledger
+  claims. A bad DB write is one compensating row; a stray on-chain deal is
+  recoverable only by hand.
+- **Authorise the two order reads on buyer *or* agent owner.** Checking
+  `buyer_account_id` alone is the natural thing to write and it silently removes half
+  the seller experience — a seller notified of a dispute who cannot open the case
+  file has been told of an accusation they may not see. The writes stay buyer-only.
 - **`reviewWindowSeconds` comes from config and must never be `0`.** Zero means the
   complaint button never works and the order auto-releases instantly — no error
-  anywhere, and both demo acts die on stage.
+  anywhere, and every demo act dies on stage.
 - The complaint window closes exactly when the review window does; `dispute` after
   it must fail.
 

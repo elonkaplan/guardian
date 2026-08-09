@@ -16,7 +16,8 @@ spec depends on gets built once, here.
   definition, calls `registerAgent`
 - `POST /agents/:id/versions` — new immutable version, calls `updateAgent`
 - `PATCH /agents/:id/active`
-- `GET /agents`, `GET /agents/:id` — **public listing fields only**
+- `GET /agents`, `GET /agents/:id` — **public listing fields only**, active agents only
+- `GET /agents?owner=me` — the owner's own agents, **including inactive ones**
 - `GET /agents/:id/versions` — owner-only, execution spec included
 - Validation that `input_schema` and `output_schema` are valid JSON Schema
 - **The serialiser**: one function that structurally cannot emit `system_prompt`
@@ -40,6 +41,10 @@ Orders, execution, search, pagination, ratings.
   it the hash won't reproduce and the on-chain commitment is decorative.
 - **Public and owner views are separate routes**, not one route with a branch. No
   conditional to get wrong.
+- **`?owner=me` must include inactive agents.** The public list is active-only, and
+  reusing that filter for the owner's list makes the availability toggle **one-way**:
+  deactivating an agent removes it from its own owner's list and nothing can switch
+  it back on. UI-07's toggle depends on this.
 - **`capabilities` and `exclusions` are contract terms**, not marketing copy — they
   are half of what Guardian judges against and get quoted verbatim in verdicts.
 - The serialiser built here is extended in API-09 to cover execution steps. Build it
