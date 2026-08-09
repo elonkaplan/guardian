@@ -29,12 +29,22 @@ import { z } from 'zod';
  * the ledger can never remove, because it is append-only (invariant #4). Both
  * are the caller having made a mistake, so both are a `400`.
  *
+ * **Three callers, not two.** `POST /topup` and `POST /offramp` were the
+ * original pair; `priceMinor` on the catalogue's two write bodies —
+ * `POST /agents` and `POST /agents/:id/versions` — is the third. The same
+ * three clauses carry over unchanged: a zero-price agent would open deals that
+ * escrow nothing, and a fractional price is a seller who typed dollars. The
+ * database agrees independently via `CHECK (price_minor > 0)`; this is the
+ * layer that turns that constraint into a `400` naming the field instead of a
+ * `500` from inside TypeORM.
+ *
  * **No minimum and no maximum beyond the safe-integer bound.** The real
- * ceiling on a top-up is what the funder wallet actually holds, and on a
- * cash-out what the account's ledger sums to — both checked against live state
- * (R15, R8), not guessed at here. A hardcoded cap would be a number invented
- * at rehearsal scale, and the thing about an invented cap is that it gets hit
- * on stage. `Number.MAX_SAFE_INTEGER` is not that kind of limit: past it,
+ * ceiling on a top-up is what the funder wallet actually holds, on a
+ * cash-out what the account's ledger sums to, and on a listing nothing at all —
+ * what a seller may charge is their business (`006` R15). The first two are
+ * checked against live state (R15, R8), not guessed at here. A hardcoded cap
+ * would be a number invented at rehearsal scale, and the thing about an
+ * invented cap is that it gets hit on stage. `Number.MAX_SAFE_INTEGER` is not that kind of limit: past it,
  * JavaScript silently stops being able to represent the integer at all, so the
  * bound is about arithmetic being true rather than about policy.
  *

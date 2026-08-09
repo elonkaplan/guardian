@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
+import { CatalogModule } from './catalog/catalog.module';
 import { ChainModule } from './chain/chain.module';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
@@ -34,6 +35,7 @@ import { RainModule } from './rain/rain.module';
     LedgerModule,
     ChainModule,
     OrdersModule,
+    CatalogModule,
     AccountsModule,
     FundingModule,
     RainModule,

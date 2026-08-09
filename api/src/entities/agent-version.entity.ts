@@ -74,9 +74,28 @@ export class AgentVersion {
    * column: execution steps can paraphrase the prompt, so reasoning text
    * must be summarised rather than passed through.
    *
-   * Enforcement is a dedicated serialiser built in a later feature
-   * (API-06 catalogue) — this doc-comment exists so that serialiser has
-   * something unambiguous to key on. Nothing enforces it yet.
+   * Enforcement lives in `src/catalog/agent-serialiser.ts`, and it is
+   * structural rather than remembered — three independent layers have to fail
+   * before this column reaches a buyer:
+   *
+   *  1. **It is never read.** The buyer-facing repository queries name their
+   *     columns explicitly and this is not among them, so on a public read the
+   *     prompt does not enter the process at all — which also protects a log
+   *     line and a stack trace, not just a response body.
+   *  2. **The serialiser cannot see it.** Its parameter type is a `Pick<>` of
+   *     the listing fields, so no expression inside it can read this property.
+   *     Emitting it requires editing that type.
+   *  3. **The response types are closed.** Exact interfaces, no index
+   *     signature, so spreading an entity into a response is a compile error
+   *     rather than a leak.
+   *
+   * The one place this column is legitimately mapped is
+   * `src/catalog/agent-versions.service.ts`, serving the owner-only
+   * `GET /agents/:id/versions`. It is deliberately NOT in the serialiser
+   * module: a mapper that must see this field does not belong behind a
+   * boundary defined by not having it.
+   *
+   * (`specs/006-agent-catalogue/research.md` R9)
    */
   @Column({ type: 'text', name: 'system_prompt' })
   systemPrompt!: string;

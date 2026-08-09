@@ -18,6 +18,7 @@ import {
   UnknownAccountError,
 } from './errors';
 import { isJwtPayload } from './jwt-payload';
+import { IS_OPTIONAL_AUTH_KEY } from './optional-auth.decorator';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
 /**
@@ -36,6 +37,13 @@ import { IS_PUBLIC_KEY } from './public.decorator';
  * statements describe a token the caller already holds, so neither tells them
  * anything they did not supply. It is also the difference between a UI that
  * silently re-prompts for a signature and one that shows "something went wrong".
+ *
+ * There are three states, not two. `@Public()` skips the credential entirely;
+ * the unannotated default requires one; `@OptionalAuth()` sits between them and
+ * means "a credential is not required, but if one is offered it must be good".
+ * The middle state is not a weaker version of the default — the only thing it
+ * relaxes is the *absence* of a header. Every other failure below is reached and
+ * refused exactly as it would be on a protected route.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -59,7 +67,38 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
+    // Same handler-then-class order, and read only after @Public() has already
+    // declined to return: if both somehow land on one target, @Public() wins.
+    // Ordering them this way means @OptionalAuth() can never be mistaken for a
+    // way to tighten a route that @Public() has already opened.
+    const isOptional = this.reflector.getAllAndOverride<boolean>(
+      IS_OPTIONAL_AUTH_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
     const request = context.switchToHttp().getRequest<Request>();
+
+    // ⚠️ The header is inspected HERE, before extractBearerToken, rather than by
+    // catching what it throws — and that is not a stylistic preference.
+    // `extractBearerToken` raises the same `MissingCredentialError` for two
+    // situations this state must hold apart: no `Authorization` header at all
+    // (no credential was offered, which on an optional route is allowed) and
+    // `Authorization: Bananas` (a credential was offered and it is rubbish,
+    // which is a 401 anywhere). The thrown errors differ only in their message
+    // string, so telling them apart after the fact would mean matching on prose
+    // — a check that keeps compiling and silently stops working the day someone
+    // rewords the message, and whose failure mode is admitting bad credentials.
+    // A direct `=== undefined` on the header cannot rot that way.
+    //
+    // Deliberately narrow: only a wholly absent header short-circuits. An empty
+    // string, a lone `Bearer`, or any other scheme all fall through to the
+    // normal path and are refused, because each of those is a client that tried
+    // to authenticate and got it wrong — exactly the case a lapsed session
+    // produces, and exactly the case that must not be served an anonymous
+    // response.
+    if (isOptional === true && request.headers.authorization === undefined) {
+      return true;
+    }
 
     try {
       const token = this.extractBearerToken(request);
