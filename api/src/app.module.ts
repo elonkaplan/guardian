@@ -6,6 +6,7 @@ import { CatalogModule } from './catalog/catalog.module';
 import { ChainModule } from './chain/chain.module';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
+import { DemoModule } from './demo/demo.module';
 import { ExecutionModule } from './execution/execution.module';
 import { GuardianModule } from './guardian/guardian.module';
 import { FundingModule } from './funding/funding.module';
@@ -34,6 +35,15 @@ import { RainModule } from './rain/rain.module';
  * thing that turns a purchased order into a run — so an unregistered module here
  * would leave every purchase parked in `purchased` with the money escrowed and
  * no worker coming.
+ *
+ * `DemoModule` is registered for a version of the same reason, and its failure
+ * mode is quieter than either. Its two routes are the visible part; its
+ * `onModuleInit` is the load-bearing part, because that is what registers the
+ * three demo fixtures into the (otherwise empty) script registry. Drop this
+ * import and the endpoints 404 — but the seeded agents still exist and still
+ * run, live, producing plausible output nobody asked for. Last in the list
+ * because it depends on `CatalogModule`, `AccountsModule` and `ExecutionModule`
+ * and is depended on by nothing.
  */
 @Module({
   imports: [
@@ -50,6 +60,7 @@ import { RainModule } from './rain/rain.module';
     FundingModule,
     RainModule,
     AuthModule,
+    DemoModule,
   ],
 })
 export class AppModule {}
