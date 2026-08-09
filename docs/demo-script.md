@@ -8,23 +8,40 @@ video's job is to show the product doing the thing, not to argue for it.
 
 ---
 
-## The shape
+## ⚠️ Read this before you record anything
 
-**Record each act in full, then cut to the moments.** Nobody watches a form being
-filled. What survives the cut is: the output beside the criteria, the complaint being
-sent, and the verdict landing.
+**The inputs must be pasted exactly. Do not type them.**
 
-| | Time | On screen |
-| --- | --- | --- |
-| Sign in | 0:00–0:05 | Connect wallet → signature → signed in |
-| The listing | 0:05–0:14 | Agent detail: capabilities, exclusions, schema |
-| Act 1 | 0:14–0:28 | Output beside criteria → complaint → 0% |
-| Act 2 | 0:28–0:44 | Receipt → 3 of 5 rows → 50% → MonadVision |
-| Act 3 | 0:44–0:53 | "The agent returned nothing" → 100% |
-| Wallet | 0:53–1:00 | Refund landed in settled funds |
+`DemoScriptRegistry` keys on `(definitionHash, canonical input)`. A single changed
+character — a trimmed space, a straight quote instead of a curly one, a reordered
+array — misses the key, and the agent does a **live model run** instead of the scripted
+one. That is correct behaviour, and it means Act 2 returns whatever the model decides
+rather than three of five line items.
 
-Act 2 gets the most room deliberately — it is the only one a viewer can verify
-themselves.
+Get the exact strings from the seed itself:
+
+```bash
+curl -s -X POST https://api.guardian.clone.solutions/demo/seed > /tmp/seed.json
+
+# everything you need to paste, act by act
+cat /tmp/seed.json | jq '.fixtures[] | {act, agentKey, agentId, input, acceptanceCriteria, complaint, expectedTier}'
+```
+
+Keep that open in a second window while recording. Every `input`, `acceptanceCriteria`
+and `complaint` below comes from it — the values here are for orientation, the JSON is
+the source of truth.
+
+---
+
+## Before you hit record
+
+| | |
+| --- | --- |
+| `POST /demo/reset` | Between every take. Verdicts are persisted and never re-computed. |
+| `POST /demo/seed` | Once. Confirm `GET /agents` returns three. |
+| Buyer wallet | Monad Testnet (10143), funded — three purchases costs $4.50 |
+| Tabs | The app · MonadVision on the escrow · the seed JSON |
+| Browser | ~125% zoom. Hard-refresh after any redeploy. |
 
 ---
 
@@ -32,21 +49,31 @@ themselves.
 
 ### 0:00 — Sign in
 
-**Do:** Connect Wallet → sign → land signed in.
+**Do:** Connect Wallet → MetaMask → sign. One signature, no password.
 
 > Registration is one wallet signature. No password, no email.
 
 ### 0:05 — What a seller sells
 
-**Do:** open an agent's detail page. Point at capabilities, then exclusions.
+**Do:** Marketplace → open **LedgerBot**. Scroll to capabilities, then exclusions.
 
 > Every listing carries capabilities, exclusions, and the schema its output has to
 > satisfy. These are contract terms — Guardian quotes them verbatim when it rules.
 
-### 0:14 — Act 1
+*Point at the exclusion "Does not convert between currencies…" — it comes back in Act 2.*
 
-**On screen:** the buy form with criteria typed, then output beside criteria, then the
-verdict.
+### 0:14 — Act 1 · TLDR Agent · expect 0%
+
+**Agent:** TLDR Agent ($1.00) · **fixture:** `.fixtures[] | select(.act==1)`
+
+| Field | Value |
+| --- | --- |
+| `wordCap` | `100` |
+| `document` | **paste** — the NordWind operations memo, 259 words |
+| Acceptance criteria | `Under 100 words, must cover the pricing change.` |
+| Complaint | *"This is far too short. I paid for a summary of a multi-section memo and got one paragraph — it cannot possibly cover a document this size properly."* |
+
+**Do:** Buy → wait for delivery → **Complain** with the text above → verdict.
 
 > I write my acceptance criteria before anything runs — under a hundred words, must
 > cover the pricing change.
@@ -56,10 +83,18 @@ verdict.
 >
 > **Zero percent.** Guardian cites my own word cap back at me.
 
-### 0:28 — Act 2
+### 0:28 — Act 2 · LedgerBot · expect 50%
 
-**On screen:** the receipt, then the three returned rows. Linger — this is the shot the
-demo rests on.
+**Agent:** LedgerBot ($2.00) · **fixture:** `.fixtures[] | select(.act==2)`
+
+| Field | Value |
+| --- | --- |
+| `receiptText` | **paste** — invoice 4471, five line items, total EUR 362.00 |
+| Acceptance criteria | `Extract all line items with their amounts, and give the correct total.` |
+| Complaint | *"Two line items are missing — the desk lamp and the cable kit — so the total is 62.00 short. It also left everything in euros instead of converting the amounts to dollars."* |
+
+**Do:** Buy → delivery shows **3 line items, total 300.00** → Complain → verdict →
+click the transaction hash.
 
 > A receipt with five line items. This one returns three.
 >
@@ -72,9 +107,21 @@ demo rests on.
 
 > The split executes on-chain. That's the transaction.
 
-### 0:44 — Act 3
+⚠️ **The criteria must not mention currency.** In the complaint the grievance is
+unfounded; in the criteria it becomes something you legitimately asked for and the tier
+moves off 50%.
 
-**On screen:** "The agent returned nothing." Then the verdict.
+### 0:44 — Act 3 · PolyglotAI · expect 100%
+
+**Agent:** PolyglotAI ($1.50) · **fixture:** `.fixtures[] | select(.act==3)`
+
+| Field | Value |
+| --- | --- |
+| `description` + `preserveTerms` | **paste** — array order is part of the key |
+| Acceptance criteria | `Translate the product description into German, keeping the product names unchanged.` |
+| Complaint | *"Nothing came back at all. There is no translation in the order — I paid $1.50 and received nothing."* |
+
+**Do:** Buy → order shows **"The agent returned nothing."** → Complain → verdict.
 
 > The third agent crashes and returns nothing. The platform recorded the crash, so the
 > absence itself is evidence.
@@ -83,7 +130,7 @@ demo rests on.
 
 ### 0:53 — Wallet
 
-**On screen:** the wallet page.
+**Do:** open `/wallet`.
 
 > Available balance and settled funds, tracked separately. The refund landed on-chain
 > under my own address — I withdraw it whenever I want.
@@ -94,22 +141,29 @@ demo rests on.
 
 | Not in the video | Why |
 | --- | --- |
-| The problem statement, the thesis | On the slides |
-| The countdown and auto-release | 30 seconds of screen time proving less than the verdicts do |
-| Rain stubbed, testnet caveats | README and submission text — worth saying, not worth ten seconds |
-| Agent buyers being deferred | Keep as a spoken answer if a judge asks why a human is clicking |
+| Problem statement, thesis | On the slides |
+| The countdown and auto-release | 30 seconds proving less than the verdicts do |
+| Rain stubbed, testnet caveats | README and submission text |
+| Agent buyers deferred | Keep as a spoken answer if a judge asks why a human is clicking |
 
 ## Production notes
 
-- **Text overlays carry what speech can't afford.** Put `0%` / `50%` / `100%` and the
-  transaction hash on screen. Don't spend words on numbers a viewer can read.
+- **Overlays carry the numbers.** Put `0%` / `50%` / `100%` and the tx hash on screen;
+  don't spend words on things a viewer can read.
 - **Guardian takes ~9–10s to rule.** Cut every second of it.
-- **Zoom the browser to ~125%** before recording — the verdict checklist has to survive
-  compression.
-- `POST /demo/reset` between takes. Verdicts are persisted and never re-computed, so a
-  settled order cannot be replayed.
-- Act 2's tier is **50%, confirmed on three separate passes** with the verdicts deleted
-  between each. If a take returns something else, say the number you got.
+- **Record each act as its own take.** Each ends settled and cannot be replayed, so a
+  fluffed line otherwise means resetting all three.
+- Act 2 returned **50% on three separate passes** with verdicts deleted between each. If
+  a take differs, say the number you got.
+
+## If a take goes wrong
+
+| Symptom | Cause |
+| --- | --- |
+| Output isn't the scripted one | Input didn't match the key exactly. Reset, re-paste from the JSON. |
+| Marketplace empty | Not seeded, or seeded against a different database |
+| Stuck on "Guardian is reviewing" | Audit parse failed. Reset and re-run; it won't recover. |
+| Balance won't move | Funder wallet is out of test USDC — the faucet is exhausted |
 
 ## If you only keep three shots
 
