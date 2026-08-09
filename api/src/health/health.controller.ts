@@ -6,9 +6,17 @@ import {
   TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
 
+import { Public } from '../auth/public.decorator';
+
 /**
  * Unauthenticated by design, and it must stay that way once auth lands — a
  * health check behind a guard is a health check nothing can call.
+ *
+ * Auth has now landed, and the guard it brought is GLOBAL and fail-closed:
+ * every route is protected unless it carries `@Public()`. So the marker below
+ * is the thing keeping the sentence above true — deleting it does not make this
+ * endpoint "default open", it makes Compose's dependency graph fail with a
+ * timeout that reads as a database problem.
  *
  * Deliberately shallow: one indicator, the database. The Monad RPC endpoint and
  * the Anthropic API are NOT probed. Both are third-party, and probing them would
@@ -23,6 +31,7 @@ export class HealthController {
   ) {}
 
   @Get()
+  @Public()
   @HealthCheck()
   check(): Promise<HealthCheckResult> {
     return this.health.check([

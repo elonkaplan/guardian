@@ -23,6 +23,17 @@ import { type AppConfig } from './env.schema';
 const HEX_PLACEHOLDER = /^0xDEAD0+\d{4}$/i;
 const ANTHROPIC_PLACEHOLDER = 'sk-ant-placeholder';
 
+/**
+ * The shipped .env.example JWT secret. Worth naming even though a placeholder
+ * secret still signs and verifies perfectly well — that is exactly the problem.
+ * Every developer who copies .env.example signs with the same key, so a token
+ * minted on one machine is accepted on every other one, and the key itself is
+ * in git history forever. The chain placeholders at least fail loudly on-chain;
+ * this one never errors at all. Auth just quietly stops being secret.
+ */
+const JWT_SECRET_PLACEHOLDER =
+  'placeholder-jwt-secret-replace-me-before-running-0000';
+
 export function detectPlaceholders(config: AppConfig): readonly string[] {
   const suspects: Array<keyof AppConfig> = [
     'ESCROW_CONTRACT_ADDRESS',
@@ -34,6 +45,7 @@ export function detectPlaceholders(config: AppConfig): readonly string[] {
     'FUNDER_ADDRESS',
     'FUNDER_PRIVATE_KEY',
     'ANTHROPIC_API_KEY',
+    'JWT_SECRET',
   ];
 
   return suspects.filter((key) => {
@@ -41,7 +53,9 @@ export function detectPlaceholders(config: AppConfig): readonly string[] {
     if (typeof value !== 'string') return false;
 
     return (
-      HEX_PLACEHOLDER.test(value) || value.startsWith(ANTHROPIC_PLACEHOLDER)
+      HEX_PLACEHOLDER.test(value) ||
+      value.startsWith(ANTHROPIC_PLACEHOLDER) ||
+      value.startsWith(JWT_SECRET_PLACEHOLDER)
     );
   });
 }
@@ -50,8 +64,16 @@ export function warnAboutPlaceholders(config: AppConfig): void {
   const found = detectPlaceholders(config);
   if (found.length === 0) return;
 
+  // Deliberately vague about the consequence now that JWT_SECRET is in scope.
+  // The old wording — "no chain or LLM path will work" — was true of every key
+  // this checked until auth arrived, and is exactly wrong for JWT_SECRET: a
+  // placeholder secret works perfectly, it is just shared with everyone who
+  // ever cloned the repository. Naming a consequence that does not apply to
+  // every listed key teaches the reader to skim the line.
+  const label = found.length === 1 ? 'value is' : 'values are';
+
   new Logger('Config').warn(
-    `${found.length} configuration ${found.length === 1 ? 'value is' : 'values are'} still placeholders — ` +
-      `no chain or LLM path will work until they are replaced: ${found.join(', ')}`,
+    `${found.length} configuration ${label} still a placeholder — ` +
+      `replace before relying on: ${found.join(', ')}`,
   );
 }

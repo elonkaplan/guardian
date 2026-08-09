@@ -2,8 +2,8 @@
 
 The Guardian backend: marketplace, execution host, audit engine, and the only
 component that talks to the chain. Currently at the foundation stage — config
-loading, database connection, and migrations are wired up, with a single
-`GET /health` endpoint. No domain logic yet.
+loading, database connection, migrations, and wallet auth are wired up, with
+`GET /health` and the `/auth` routes. No domain logic yet.
 
 ## Quick start (Docker)
 
@@ -162,6 +162,96 @@ schema were found"**. If it generates a file, that is real drift — read it, fi
 declare every index, `CHECK`, unique, and foreign-key constraint *name* explicitly so
 this check stays trustworthy, and the first run before that was in place proposed
 dropping all four CHECKs and all five named indexes.
+
+## Auth
+
+A wallet signature in, a session token out. **Connecting a wallet is the entire
+registration** — no passwords, no email, no roles. First successful sign-in creates the
+account.
+
+### Signing in
+
+```bash
+# 1. ask for a challenge
+curl -s -X POST http://localhost:3000/auth/nonce \
+  -H 'content-type: application/json' \
+  -d '{"address":"0x45fFda76D73321D35f53396f822bA550b6AF5389"}'
+# {"nonce":"3f7a…","message":"Guardian: sign in to your account.\n\n…"}
+
+# 2. sign `message` VERBATIM — byte for byte, newlines included
+cast wallet sign --private-key "$PK" "$MESSAGE"
+
+# 3. exchange the signature for a token
+curl -s -X POST http://localhost:3000/auth/verify \
+  -H 'content-type: application/json' \
+  -d '{"address":"0x45fF…5389","signature":"0xcf9c…1c"}'
+# {"token":"eyJhbGciOiJIUzI1NiIs…"}
+```
+
+The message is composed server-side (`src/auth/sign-in-message.ts`) and returned so the
+format has exactly one implementation. Assembling it on the client means two copies of an
+unversioned string, and the failure mode is silent — a changed word or a trailing newline
+recovers some unrelated address and the user sees "signature does not match" with nothing
+pointing at formatting.
+
+Then `Authorization: Bearer <token>` on everything else. Valid **7 days**. There is no
+refresh, no sign-out, and no revocation — a token simply lapses.
+
+`GET /auth/session` (protected) returns `{ accountId, address }`: what a client calls on
+load to learn whether a stored token is still good and whose it is. **It is not `/me`** —
+that arrives in API-05 with balance and escrow, and the two do not collide.
+
+### ⚠️ Endpoints are protected by DEFAULT
+
+`JwtAuthGuard` is registered as a global `APP_GUARD` and is fail-closed. **A new route
+needs no annotation to be protected.** Opting out is the only thing that takes a keystroke:
+
+```ts
+import { Public } from '../auth/public.decorator';
+
+@Get()
+@Public()
+check() { /* … */ }
+```
+
+Public today: `GET /health`, `POST /auth/nonce`, `POST /auth/verify`, the catalogue reads
+(API-06), and `/demo/*`. Everything else is protected by saying nothing. Adding `@Public()`
+anywhere else deserves the scrutiny of deleting an authorisation check, because that is
+what it is.
+
+### Who is calling, and what they may touch
+
+`@CurrentAccount()` hands a handler the full `Account` the guard already loaded — no second
+query:
+
+```ts
+const agent = await this.agents.findById(id);
+if (agent.ownerAccountId !== account.id) throw new ForbiddenException();
+```
+
+**`401` means "I don't know who you are"; `403` means "I know, and it isn't yours."** The
+guard only ever produces `401`. Every `403` in this backend comes from a check like the one
+above, written at the resource.
+
+**There are no roles.** No role column, no role claim, no `@Roles()` decorator. The same
+account sells agents and buys other people's; permission is always ownership of the
+specific row.
+
+### Do not import `src/auth/` internals
+
+`AuthModule` exports nothing, on purpose — `JwtService`, `NonceStore`, and `AuthService`
+all stay inside it. Anything that could sign a token could mint one for another account,
+which would make the guard decorative; the guarantee is only real if there is exactly one
+place a token is born. `@Public()` and `@CurrentAccount()` are the whole contract, and
+nothing outside `auth/` should read the `Authorization` header or decode a token.
+
+`JWT_SECRET` (32+ characters) is a required `.env` key — the API will not boot without it.
+
+Contracts:
+[`auth-api.md`](./specs/004-wallet-auth/contracts/auth-api.md) (HTTP shapes and error
+table) and
+[`guard-contract.md`](./specs/004-wallet-auth/contracts/guard-contract.md) (the surface
+API-05 onward is written against).
 
 ## Tests
 

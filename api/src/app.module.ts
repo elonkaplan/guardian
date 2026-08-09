@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 
+import { AccountsModule } from './accounts/accounts.module';
+import { AuthModule } from './auth/auth.module';
 import { ChainModule } from './chain/chain.module';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
@@ -13,6 +15,8 @@ import { LedgerModule } from './ledger/ledger.module';
     HealthModule,
     LedgerModule,
     ChainModule,
+    AccountsModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

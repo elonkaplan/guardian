@@ -97,6 +97,22 @@ export const envSchema = z.object({
     ),
 
   // ---------------------------------------------------------------------
+  // AUTH
+  // ---------------------------------------------------------------------
+  // Signs and verifies every session token (HS256, one process doing both —
+  // see specs/004-wallet-auth/research.md R7).
+  //
+  // The two DURATIONS that go with it — the 7-day token life and the 5-minute
+  // sign-in challenge — are deliberately NOT here. They are neither secret nor
+  // per-deployment, so they live as constants in src/auth/auth.constants.ts.
+  // Every optional environment key is one more thing that can be absent at 3am.
+  //
+  // 32 characters is the floor rather than `.min(1)`: this one secret forges a
+  // token for every account at once, and there is no revocation to contain it.
+  // One rule, not two, so the report never names the key twice.
+  JWT_SECRET: z.string().min(32, 'expected at least 32 characters'),
+
+  // ---------------------------------------------------------------------
   // LLM
   // ---------------------------------------------------------------------
   ANTHROPIC_API_KEY: z.string().min(1, 'expected a non-empty string'),
