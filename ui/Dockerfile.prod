@@ -1,0 +1,54 @@
+# Production image: build the bundle, serve it with nginx.
+#
+# `Dockerfile` (no suffix) is the Vite dev server and says so in its own header —
+# it mounts ./src and expects hot reload. Deploying that would ship unminified
+# source, an HMR websocket nothing terminates, and Vite's `allowedHosts` check,
+# which rejects a request arriving under a domain name.
+#
+# ⚠️ `VITE_API_URL` is a BUILD arg, not a runtime env var. Vite substitutes
+# `import.meta.env.*` at build time, so setting it in the container's environment
+# does nothing at all — the value is already baked into the JavaScript. Passing
+# it here is the only place it can be set.
+
+FROM node:24 AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+
+# `npm install`, not `npm ci`. The lock file is generated on macOS and may not
+# list the Linux variants of rollup's and esbuild's platform-specific optional
+# dependencies — `npm ci` installs exactly what is recorded and fails with
+# "Cannot find module @rollup/rollup-linux-x64-gnu". `install` resolves for the
+# platform it is running on.
+RUN npm install
+
+COPY . .
+
+# Two ways in, and the precedence is Vite's own: a real environment variable
+# beats a .env file and is never overwritten by one.
+#
+#   1. `--build-arg VITE_API_URL=…`  — wins if given
+#   2. `ui/.env.production`          — used otherwise
+#
+# ⚠️ The arg is NOT promoted to ENV unconditionally. Doing that sets it to the
+# empty string when no arg is passed, which then out-prioritises .env.production
+# and compiles an empty base URL into the bundle — a frontend that calls the
+# wrong host, with nothing at build or run time saying so.
+ARG VITE_API_URL=""
+
+RUN test -n "$VITE_API_URL" || grep -qE '^VITE_API_URL=.+' .env.production || \
+    (echo "VITE_API_URL must be passed as a build arg or set in ui/.env.production" && exit 1)
+
+RUN if [ -n "$VITE_API_URL" ]; then \
+      VITE_API_URL="$VITE_API_URL" npm run build; \
+    else \
+      npm run build; \
+    fi
+
+FROM nginx:alpine
+
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80

@@ -1,0 +1,26 @@
+# Frontend, deployed. Use INSTEAD of docker-compose.yml, not alongside it —
+# that one runs the Vite dev server with ./src mounted.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# The API base URL comes from `ui/.env.production`. To override for one build:
+#
+#   VITE_API_URL=https://other.example docker compose -f docker-compose.prod.yml up -d --build
+#
+# Rebuild whenever it changes: the value is compiled into the bundle, so a
+# restart alone will not pick up a new one. The build fails if neither the
+# variable nor .env.production supplies it.
+
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    container_name: guardian-ui
+    restart: unless-stopped
+    # 127.0.0.1 is load-bearing. Docker writes its own iptables rules and
+    # BYPASSES ufw, so `3001:80` would be reachable from the internet even with
+    # the firewall closed. The host nginx reaches it over loopback.
+    ports: ['127.0.0.1:3001:80']

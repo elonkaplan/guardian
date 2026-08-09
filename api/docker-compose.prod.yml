@@ -1,0 +1,28 @@
+# Deployment overrides for the API stack. Layer on top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# The app still listens on 3000 inside the container; only the host port moves.
+# No PORT change is needed in .env.
+
+services:
+  postgres:
+    # `!reset` REMOVES the mapping. Nothing outside the compose network needs
+    # Postgres — the API reaches it by service name.
+    #
+    # Not `[]`: Compose CONCATENATES ports lists across files rather than
+    # replacing them, so an empty list would leave the original binding intact.
+    ports: !reset []
+
+  api:
+    # `!override` REPLACES the list. Do not use `!reset` here — it discards the
+    # value you give it and publishes nothing at all, which presents as nginx
+    # returning 502 while the container logs look perfectly healthy.
+    #
+    # 127.0.0.1 because Docker's iptables rules bypass ufw: a bare `3030:3000`
+    # is internet-reachable regardless of the firewall.
+    ports: !override ['127.0.0.1:3030:3000']
+
+# Requires Compose v2.24+ for the !reset / !override tags. Check with
+# `docker compose version`. On anything older, edit the ports lines in
+# docker-compose.yml directly and skip this file.
