@@ -1,9 +1,18 @@
 # Guardian — Escrow Contract Specification
 
-> ⚠️ **DRAFT — not for implementation yet.** This is a design under review. The
-> Solidity in the appendix is illustrative sketch code: it has never been compiled,
-> tested, or audited. Review the specification (§2–§5); the code is there to make
-> the spec concrete, not to be copied.
+> ✅ **BUILT AND DEPLOYED.** This began as a design under review; it is now
+> implemented, tested, and live.
+>
+> | | |
+> | --- | --- |
+> | Implementation | [`../sc/src/GuardianEscrow.sol`](../sc/src/GuardianEscrow.sol) |
+> | Tests | 81 Foundry tests — the project's only suite |
+> | Deployed | `0xe1b74F8dB511247786Ef61bde9330198a1929d53` on Monad Testnet |
+> | Source | **Verified** on MonadVision via Sourcify, `exact_match` |
+> | Exercised | Full dispute lifecycle run on-chain — see §12 |
+>
+> The appendix Solidity is the original sketch, kept for the record. **The shipped
+> contract is `sc/src/`**, not the appendix.
 
 **Chain**: **Monad Testnet** (EVM-equivalent) — see §3.6. **Settlement token**: test USDC.
 **Last updated**: 2026-08-08
@@ -334,6 +343,7 @@ point in this project.
 | **Gas token** | MON (test) — faucet: <https://faucet.monad.xyz> |
 | **Settlement token** | Test USDC, 6 decimals — `0x534b2f3A21130d7a60830c2Df862319e593943A3` |
 | **Block time / finality** | **Sub-second** |
+| **Deployed escrow** | `0xe1b74F8dB511247786Ef61bde9330198a1929d53` — source verified on MonadVision |
 
 All of it lives in `.env`; nothing is hardcoded.
 
@@ -345,11 +355,15 @@ frozen mid-purchase. It doesn't — a transaction lands faster than the 1s UI po
 the honest state is always the confirmed one. The 3s sweeper interval is generous
 rather than tight.
 
-**Contract source cannot be verified on the explorer yet.** A judge clicking the
-verdict card's transaction hash sees that the money moved, but cannot read the
-escrow code that moved it. That's a small loss in the "don't trust us, check"
-argument. Cheap mitigations: keep the Solidity in the repo, and show the relevant
-function inline in the UI next to the hash.
+**✅ Contract source is verified on MonadVision.** Verified via Sourcify with an
+`exact_match` on the runtime bytecode — so a judge clicking the verdict card's
+transaction hash reaches **readable, verified escrow code**, not an opaque blob.
+
+That matters more here than usual: the tier splits, the role separation, and the
+permissionless exits are the claims the product rests on, and all three are now
+independently checkable by someone who doesn't trust us at all.
+
+Deployed at `0xe1b74F8dB511247786Ef61bde9330198a1929d53`. Verification command in [`../sc/README.md`](../sc/README.md).
 
 **Consequences worth being explicit about:**
 
@@ -1027,3 +1041,36 @@ contract GuardianEscrow is AccessControl {
     }
 }
 ```
+
+---
+
+## 12. Verified on-chain
+
+The full dispute path was exercised against the deployed contract on Monad Testnet
+(deal #2), not just in tests:
+
+| Step | Result |
+| --- | --- |
+| `registerAgent` ($2.00) | ✅ 157,815 gas |
+| `openDeal` | ✅ `totalEscrowed` = 2,000,000 |
+| `markDelivered` | ✅ |
+| `dispute` | ✅ escrow frozen |
+| **`resolve` called by OPERATOR** | ✅ **reverted — wrong role** |
+| `resolve` called by GUARDIAN, `Tier.Half` | ✅ `0x4be587c4…` |
+| Split | ✅ buyer 1,000,000 · seller 1,000,000 |
+| **`withdrawFor(buyer)` called by OPERATOR** | ✅ **buyer's USDC +1,000,000** |
+| Solvency invariant (§3.3) | ✅ holds |
+
+Three design claims are now demonstrated rather than asserted:
+
+1. **The role split is enforced by the deployed contract** — the operator cannot
+   resolve a dispute. This is the "a compromised Guardian key can do no worse than
+   rule wrongly" argument, live.
+2. **`withdrawFor` pays the recorded party, not the caller** — the operator called
+   it and the *buyer's* wallet balance rose. That was the bug the function exists to
+   prevent (§1.7).
+3. **The 50% split is exact** — 2,000,000 in, 1,000,000 each out, escrow back to
+   zero. Act 2's arithmetic, on-chain.
+
+**What this bought the build:** when the API wires up `resolve`, the contract is no
+longer a variable. A failure there is an API failure — one unknown instead of two.

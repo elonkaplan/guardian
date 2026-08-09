@@ -494,3 +494,31 @@ Seven failures that look like something other than what they are.
 | `placeholder value still in .env: …` | A shipped `0xDEAD…` fake survived step 2. They are format-valid on purpose and pass every check except this guard | `grep -n 'TODO(placeholder)' ../.env`, replace the named key, re-export (3a) |
 | `forge Version: 1.7.1` with no `-monad-`, or `forge: command not found` | Upstream Foundry is winning `~/.foundry/bin`, or the shell predates the install. Both toolchains use the same path and binary name | Re-run 1a with `--network monad`; apply 1b and open a new terminal |
 | Deploy fails on insufficient funds | The deployer holds under 1 MON. The charge tracks the padded gas *limit*, not the ~3.0M gas actually used (see 3b) | Top the deployer up from https://faucet.monad.xyz/ |
+
+---
+
+## Verifying the source on MonadVision
+
+Run after deploying. Works via **Sourcify**, not an Etherscan-style API:
+
+```bash
+forge verify-contract \
+  --rpc-url "$MONAD_RPC_URL" \
+  --verifier sourcify \
+  --verifier-url 'https://sourcify-api-monad.blockvision.org/' \
+  "$ESCROW_CONTRACT_ADDRESS" \
+  src/GuardianEscrow.sol:GuardianEscrow
+```
+
+**The trailing slash on `--verifier-url` is load-bearing.** Without it, forge falls
+through to an Etherscan-shaped call and fails with a deserialization error that names
+neither the cause nor the fix.
+
+⚠️ **Do not add `metadata_hash = "none"` or `use_literal_content = true` to
+`foundry.toml`.** Monad's guide offers them as a timeout workaround, but both change
+the metadata appended to the bytecode — applied after deployment they turn a passing
+`exact_match` into a mismatch. They are a pre-deployment choice, and verification
+takes under a second without them.
+
+Current deployment: [`0xe1b74F8dB511247786Ef61bde9330198a1929d53`](https://testnet.monadvision.com/address/0xe1b74F8dB511247786Ef61bde9330198a1929d53) —
+verified, `exact_match`.

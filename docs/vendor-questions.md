@@ -146,7 +146,13 @@ We're on `pragma ^0.8.24` with OpenZeppelin `AccessControl` and `SafeERC20`. We
 expect full parity, but: any unsupported opcodes, gas-metering differences, or a
 recommended compiler/EVM target for testnet?
 
-### M7. ~~Contract verification on the explorer?~~ ❌ **NOT AVAILABLE YET** (accepted)
+### M7. ~~Contract verification on the explorer?~~ ✅ **AVAILABLE — and done**
+
+> **The in-person answer was wrong.** We were told verification wasn't available;
+> Monad's docs said otherwise, and the docs were right. It works via **Sourcify**
+> (not an Etherscan-style API), returned `exact_match` on the first attempt, and
+> needed no config changes. Worth remembering that a verbal "no" from a busy person
+> at a hackathon is worth one cheap test before being believed.
 
 Hardhat or Foundry — is either better supported? And **can we verify the contract on
 the explorer?**
@@ -173,7 +179,7 @@ If there's only time for four: **R1, R2, M1, M2.**
 
 ## Status after the first conversation
 
-**Answered:** R1 ❌ · R2 ✅ · R3 ✅ · M1 ✅ · M2 ✅ · M4 ✅ · M7 ❌
+**Answered:** R1 ❌ · R2 ✅ · R3 ✅ · M1 ✅ · M2 ✅ · M4 ✅ · M7 ✅ *(the verbal no was wrong — see M7)*
 
 **R1's answer changed the plan: Rain is now stubbed entirely** — see
 [rain-integration.md](./rain-integration.md) §0. R4–R8 are therefore moot unless a

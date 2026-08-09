@@ -5,8 +5,10 @@ refund.**
 
 Built for the Rain × Monad hackathon.
 
-> **Status:** design complete, implementation starting. Every architectural decision
-> is written down in [`docs/`](./docs); the code is being built from 21 specs.
+> **Status:** contract complete and live; backend and frontend in progress.
+> `sc/` is deployed, tested, and verified on-chain. `api/` and `ui/` are being built
+> from the specs in each component's `docs/specs/`. Every architectural decision is
+> written down in [`docs/`](./docs).
 
 ---
 
@@ -166,9 +168,12 @@ request they would send**, then return without calling. A funder wallet supplies
 USDC instead. If a Monad rail ships, this becomes a config flag rather than a
 feature.
 
-Contract source is not verified on the explorer — MonadVision verification wasn't
-available to us — so the Solidity lives in [`sc/`](./sc) for anyone who wants to read
-what the transaction hashes point at.
+**The escrow is deployed and its source is verified.**
+[`0xe1b74F8dB511247786Ef61bde9330198a1929d53`](https://testnet.monadvision.com/address/0xe1b74F8dB511247786Ef61bde9330198a1929d53)
+on Monad Testnet, verified via Sourcify with an exact bytecode match — so the
+transaction hash on a verdict card leads to readable code, not a blob. The tier
+splits, the role separation, and the permissionless exits are all checkable without
+trusting us.
 
 ## Design docs
 

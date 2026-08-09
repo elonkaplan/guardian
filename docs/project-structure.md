@@ -69,16 +69,30 @@ though the rest of the stack is TypeScript.
 Monad's docs name this version floor explicitly. Pin it in both `api/` and `ui/`.
 Good news for the choice of viem — it's the client library Monad calls out.
 
-### 1.4 ℹ️ Contract verification — noted, not doing it
+### 1.4 ✅ Contract verification — done, and it was trivial
 
-Monad's docs reference a verification guide and a MonadVision verification tool,
-which doesn't match what we were told in person. **Decided: not needed for the MVP.**
+The docs were right and the in-person answer was out of date: verification works via
+**Sourcify**, not an Etherscan-style API.
 
-Recorded only so the trade-off is a choice rather than an oversight — an unverified
-contract means a judge clicking the verdict card's transaction hash sees that money
-moved, but can't read the escrow code that moved it. Mitigation is already in the
-plan: the Solidity is in `sc/`, and the UI can show the relevant function next to the
-hash.
+```bash
+forge verify-contract \
+  --rpc-url https://testnet-rpc.monad.xyz \
+  --verifier sourcify \
+  --verifier-url 'https://sourcify-api-monad.blockvision.org/' \
+  $ESCROW_CONTRACT_ADDRESS src/GuardianEscrow.sol:GuardianEscrow
+```
+
+`exact_match` on the first attempt, 501ms compile, no config changes.
+
+**The trailing slash on `--verifier-url` is load-bearing** — without it forge falls
+through to an Etherscan-shaped call and fails with a deserialization error that names
+neither the real cause nor the fix.
+
+⚠️ **Do NOT add the `metadata_hash = "none"` / `use_literal_content = true` settings
+that Monad's guide offers as a timeout workaround.** Both change the CBOR metadata
+appended to the bytecode, which changes the bytecode. Applied *after* deployment they
+would turn a passing `exact_match` into a mismatch. They are a pre-deployment choice,
+and with sub-second verification there is nothing to work around.
 
 **Other Monad facts, none of which constrain us:** 300ms blocks (matches the
 sub-second finality we were told), 128 KB max contract size (we're nowhere near),
@@ -448,7 +462,7 @@ All resolved — no open questions.
 
 | Question | Decision |
 | --- | --- |
-| Contract verification on MonadVision | **Not needed for the MVP.** §1.4 stands as a note, not a task. |
+| Contract verification on MonadVision | ✅ **Done** — Sourcify, `exact_match`. See §1.4. |
 | Deployer wallet | **Separate** from the funder — the deploy key can be discarded once the contract is up |
 | Migrations | **Separate command, TypeORM migrations.** Not `synchronize`. See §3.3. |
 
