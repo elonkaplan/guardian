@@ -13,6 +13,25 @@ async function bootstrap(): Promise<void> {
   const config = app.get(ConfigService<AppConfig, true>);
   const port = config.get('PORT', { infer: true });
 
+  // The deployed frontend and API sit on different subdomains, which makes every
+  // browser call cross-origin. Nest sends no CORS headers by default, so without
+  // this the browser blocks each response while `curl` keeps working perfectly —
+  // a failure that looks like the API being down when it is entirely up.
+  //
+  // An explicit list rather than `origin: true`. Reflecting whatever origin asks,
+  // together with `credentials: true`, lets any page on the internet make
+  // authenticated requests on a signed-in user's behalf. The list costs nothing
+  // and the reflection buys nothing we need.
+  //
+  // Hardcoded rather than configured: these are the only two origins that exist,
+  // and adding a required key to env.schema.ts would invalidate every deployed
+  // .env at the moment we can least afford it. If the frontend is ever served
+  // from the API's own origin (nginx proxying /api/), none of this is consulted.
+  app.enableCors({
+    origin: ['https://guardian.clone.solutions', 'http://localhost:5173'],
+    credentials: true,
+  });
+
   await app.listen(port);
 
   new Logger('Bootstrap').log(`Guardian API listening on port ${port}`);
