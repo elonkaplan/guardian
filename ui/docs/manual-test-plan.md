@@ -344,19 +344,21 @@ declines to display is still a field that was sent.
 | 7.4 | Search it for `prompt`, `reasoning`, and `raw` | None of them present as fields carrying model text | ☐ |
 | 7.5 | Find the `verdict` request response and search it for `systemPrompt` | Not present | ☐ |
 | 7.6 | Find the agent detail request (`/agents/...`) and search its response for `systemPrompt`, `model`, `timeoutSeconds` | None present | ☐ |
-| 7.7 | Look at the `steps` array in the buyer's case-file response | It is **`[]`** | ☐ |
-| 7.8 | On the buyer's screen, read what the trace section says | It says the trace is **not included in a buyer's copy**. It does **not** say "no execution steps were recorded" | ☐ |
+| 7.7 | Look at the `steps` array in the buyer's case-file response | **Populated** — one entry per recorded step, each with `label`, `summary`, `durationMs`, `error` and **nothing else** | ☐ |
+| 7.8 | Read one of those step objects field by field | No `reasoning`, no `prompt`, no `raw`. `summary` is a terse platform sentence, not model prose | ☐ |
+| 7.9 | On the buyer's screen, check the trace section renders those steps | The list is on screen. The empty-state sentence is **not** shown | ☐ |
 
-> ⚠ **7.7 is a known API defect, not a frontend failure.** The server never sends a buyer their
-> execution trace — the array is empty on every order, regardless of what the agent did. The
-> seller's copy of the same order (§3.9.7) carries the real trace, which is how you tell the
-> two apart. It is recorded in `docs/reconciliation-note.md` and has been raised against the
-> API. Tick 7.7 if the array is empty; that is what is expected today.
+> **7.7 changed on 2026-08-09.** It used to expect `[]` — the server sent a buyer no trace at
+> all, which was `api-wrong` row 5 of `api/docs/openapi-divergences.md`. That is fixed: a buyer
+> now receives the redacted trace. **An empty array on the Act 2 order is now a failure to
+> report**, not the expected result.
 >
-> **7.8 is a frontend requirement and can fail.** If the buyer's screen says "no execution
-> steps were recorded", that is a false statement about their order — it reads as evidence the
-> agent did nothing, on the screen where they are deciding whether they were treated fairly.
-> Report it.
+> **7.8 is the redaction check, and it is the one that matters here.** The buyer's copy is
+> summarised, not raw: `reasoning` can paraphrase the seller's system prompt, so it must never
+> appear. If any step carries a `reasoning` field, or a `summary` that reads like the model
+> talking rather than the platform describing, stop and report it — that is invariant #3
+> failing. The seller's copy of the same order (§3.9.7) carries `rawSteps`, and *that* one is
+> supposed to have the prose in it.
 
 ---
 

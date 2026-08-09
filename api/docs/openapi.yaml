@@ -14,8 +14,9 @@ info:
     different questions and collapsing them is how a bug becomes a contract. The
     differences between this document and the product's design documents are
     recorded, with a verdict on each, in **`openapi-divergences.md`** alongside this
-    file. Read it before building against anything here that surprises you: rows
-    marked `DO NOT ADOPT` are known defects that were documented rather than fixed.
+    file. Read it before building against anything here that surprises you. As of
+    2026-08-09 every row is safe to adopt: the one row that was a defect — the buyer's
+    case-file trace — has been fixed, and no `DO NOT ADOPT` marker remains.
 
     ## Four things worth knowing before you read the rest
 
@@ -1227,17 +1228,21 @@ paths:
 
 
         - the order's **buyer** receives `BuyerCaseFileResponse`, whose `steps`
-          array is **always empty**;
+          array carries the **redacted** trace — `label`, `summary`,
+          `durationMs` and `error` per step, never the model's `reasoning`;
 
         - the **owner of the agent that ran** receives
           `SellerCaseFileResponse` — the same fields plus `systemPrompt` and
-          `rawSteps`, with `steps` populated.
+          `rawSteps`, the unredacted trace as recorded.
 
 
-        The redaction is enforced in the query, not in a formatter: on a buyer's
-        read the system prompt is never selected, so it cannot leak through a log
-        line or a stack trace either. A client that may be either party must
-        branch on the presence of `systemPrompt`.
+        The prompt is withheld in the query, not in a formatter: on a buyer's
+        read `system_prompt` is never selected, so it cannot leak through a log
+        line or a stack trace either. The step redaction is a mapping — the
+        serialiser reads four fields by name and composes `summary` from the
+        step's structure, never from model prose — and `BuyerCaseFileResponse`
+        is closed, so there is nowhere for a fifth field to land. A client that
+        may be either party must branch on the presence of `systemPrompt`.
 
 
         Answers for an order in **any** state. A `purchased` order returns
@@ -3027,22 +3032,21 @@ components:
         steps:
           type: array
           description: |
-            ⚠️ **DO NOT ADOPT — known divergence, documented rather than fixed.**
+            The run's execution trace, **redacted** — what `api-design.md` §1.3 and
+            `ui-design.md` §7.1 call the summarised trace a buyer is shown.
 
-            **Always `[]` for a buyer — an empty array, in every response, always.** The
-            query that serves a buyer deliberately does not select the run's step column,
-            so the agent's reasoning never enters the process on a buyer's read. Only
-            `SellerCaseFileResponse` carries populated steps.
+            Each step carries `label`, `summary`, `durationMs` and `error` and nothing
+            else. The model's `reasoning` is **never** included: it can paraphrase the
+            seller's system prompt, so `summary` is composed by the platform from the
+            step's structure rather than from anything the model wrote. Only
+            `SellerCaseFileResponse.rawSteps` carries the trace as recorded.
 
-            The design (`api-design.md` §1.3, `ui-design.md` §7.1) says a buyer **is**
-            shown a summarised trace, so this is a defect in the implementation and not a
-            behaviour to build against. It is recorded as row 5 of
-            `openapi-divergences.md`, where the reason it was left unfixed — it touches the
-            seller-IP boundary — is set out in full.
+            `[]` means the order has no run, or a run that recorded no steps. That is
+            content — for an order that never ran, the empty trace is the evidence.
 
-            Until it is resolved: do not build a trace, timeline or progress view on this
-            field for a buyer. It will render blank.
-          x-divergence: 'api-wrong, not fixed — see openapi-divergences.md row 5'
+            Until 2026-08-09 this field was empty for every buyer, which was row 5 of
+            `openapi-divergences.md` and the one defect that report found. It is fixed;
+            the row records what changed.
           items:
             $ref: '#/components/schemas/CaseFileStepResponse'
 
@@ -3050,8 +3054,9 @@ components:
       description: >-
         The seller's view of the case file: everything the buyer sees, plus the
         two fields that only the owner of the agent may read — the system prompt
-        and the unredacted execution trace. Unlike the buyer's shape, `steps`
-        here is populated.
+        and the unredacted execution trace. `steps` is the same redacted list the
+        buyer was shown; `rawSteps` is what it was redacted from, so the seller
+        can tell what was cited against them from what was not.
       allOf:
         - $ref: '#/components/schemas/BuyerCaseFileResponse'
         - type: object

@@ -127,28 +127,37 @@ export class CaseFileService {
    * would replace that sentence with silence on the one screen whose purpose is
    * to break it.
    *
-   * ## ⚠️ `steps` is `[]`, and that is correct rather than unfinished
+   * ## ⚠️ `steps` is the REDACTED trace, and getting here cost a layer
    *
-   * `CaseFileRow` has **no `runSteps` member**, because `findCaseFileForBuyer`
-   * does not select `r.steps`. That is deliberate and documented on the row type:
-   * the raw jsonb — reasoning included — never enters the process on a buyer's
-   * read, which is layer 1 of the three, the only layer that also protects a log
-   * line and a stack trace.
+   * This method used to return `[]` unconditionally, and while no `runs` row
+   * existed that was an accurate statement rather than a placeholder. API-08
+   * ships runs; the empty array became a silent omission of evidence
+   * `api-design.md` §1.3 says the buyer is owed, on the one screen where a buyer
+   * decides whether they were treated fairly — see
+   * `docs/ESCALATION-buyer-case-file-steps.md` for how the decision was reached.
    *
-   * **Do not add the column to the buyer's query to "fill this in".** Today it
-   * would change nothing anyway: API-08 does not exist, no `runs` row is ever
-   * written, and every case file in the product reports an empty trace — which
-   * is an accurate statement that nothing has run, not a placeholder.
-   *
-   * When API-08 lands and a buyer's redacted trace becomes something a screen
-   * can actually show, the decision is whoever wires it up: `reasoning` lives
+   * **The change is a deliberate weakening of one layer of three, and this is
+   * the diff that says so.** Layer 1 was the select list: `findCaseFileForBuyer`
+   * did not name `r.steps`, so the raw jsonb never entered the process on a
+   * buyer's read — the only layer that also covers a log line, an error message
+   * and a stack trace, none of which pass through a mapper. `reasoning` lives
    * inside the same jsonb column as the fields the summary is composed from, so
-   * layer 1 cannot separate them at the column level, and the buyer's path would
-   * fall back to layers 2 and 3 — `toBuyerCaseFileSteps`, which never reads
-   * `reasoning`, and `CaseFileStepResponse`, which has nowhere to put it. That
-   * mapper is already written and already safe. Making the change is a
-   * deliberate weakening of one layer of three, and it belongs in a diff that
-   * says so, not in this one.
+   * that layer cannot separate them: it was the whole trace or none of it.
+   *
+   * What still holds the boundary, and what to check before touching this line:
+   *
+   * - **Layer 2 — `toBuyerCaseFileSteps`.** Reads `kind`, `label`, `durationMs`
+   *   and `error` by name, one property at a time, and never `reasoning`. It
+   *   composes `summary` from structure rather than from prose, so there is no
+   *   code path from the model's text to a buyer's response.
+   * - **Layer 3 — `CaseFileStepResponse`.** Closed, four fields, no index
+   *   signature: a fifth has nowhere to land, and a spread is a compile error.
+   *
+   * ⚠️ **`row.runSteps` is now in scope on a buyer's path, and only
+   * `toBuyerCaseFileSteps` may read it.** Passing it anywhere else — a log line,
+   * an error, `rawSteps`, a spread — puts `reasoning` in front of a buyer and
+   * breaks invariant #3. It is typed `unknown[]` rather than `ExecutionStep[]`
+   * precisely so that nothing here can reach a field by name.
    *
    * `runError` and `runDurationMs` are fetched and not emitted: the buyer's
    * response type declares neither — the UI's `CaseFile` does not — and
@@ -178,7 +187,9 @@ export class CaseFileService {
       capabilities: row.capabilities,
       exclusions: row.exclusions,
       output: row.runOutput,
-      steps: [],
+      // ⚠️ The redaction, and the only read of `runSteps` on this path. Not
+      // `row.runSteps`, not a cast, not a spread — see the warning above.
+      steps: toBuyerCaseFileSteps(row.runSteps),
     };
   }
 
@@ -202,8 +213,8 @@ export class CaseFileService {
    *
    * ⚠️ **The `as ExecutionStep[]` is an unchecked assertion, and it is
    * acceptable here and nowhere on a buyer's path.** `runs.steps` is jsonb that
-   * nothing has validated — API-08 will write it and does not exist yet — so
-   * this is a claim about a document this process has never seen.
+   * nothing has validated — API-08 writes it, and no read path checks the shape
+   * back — so this is a claim about a document this process has never seen.
    * `toBuyerCaseFileSteps` refuses to make that claim and re-reads every field
    * defensively; this line makes it because the value is going back to its own
    * author. A malformed step here shows a seller their own bad data on their own
@@ -212,7 +223,7 @@ export class CaseFileService {
    *
    * `?? []` because the `LEFT JOIN` yields `null` for an order that never ran,
    * and `rawSteps` is declared non-optional: an empty trace is a fact the screen
-   * states. Always `[]` until API-08 exists.
+   * states.
    */
   async getForSeller(orderId: string, accountId: string): Promise<SellerCaseFileResponse> {
     const row = await this.orders.findCaseFileForSeller(orderId, accountId);

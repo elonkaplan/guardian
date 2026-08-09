@@ -245,6 +245,15 @@ export class OrderRepository {
    * inside a query builder, where a later edit could flip it without touching
    * anything that looks like a security boundary (R10).
    *
+   * ⚠️ **`runs.steps` IS selected, raw, and the redaction happens above.** It
+   * used to be a seller-only column, so the prompt-adjacent prose in `reasoning`
+   * could not reach a buyer's log line or stack trace either. That layer is
+   * deliberately given up here: `reasoning` shares a jsonb column with the fields
+   * a buyer's summary is composed from, so the choice was the whole trace or none
+   * of it, and none of it meant a buyer disputing an order saw no evidence at
+   * all. The disclosure boundary for the buyer's copy is now
+   * `toBuyerCaseFileSteps` plus `CaseFileStepResponse`, not this select list.
+   *
    * `capabilities` and `exclusions` come off the **pinned** version, never the
    * agent's current one: a seller who lost a dispute has every reason to edit the
    * capability that was cited against them, and explaining a ruling with today's
@@ -262,10 +271,12 @@ export class OrderRepository {
   /**
    * The seller's case file — the buyer's, plus the two things that are theirs.
    *
-   * `system_prompt` is selected here because the prompt belongs to the seller;
-   * `runs.steps` is selected raw, reasoning included, for the same reason
+   * `system_prompt` is selected here because the prompt belongs to the seller,
+   * and it is now the **only** column that separates the two case files. Both
+   * select `runs.steps` raw; what differs is what the mapping above them emits —
+   * the seller's copy carries the unredacted trace beside the redacted one
    * (`docs/ui-design.md` §7.1: *"the seller's own view of the case file stays
-   * unredacted; it's their prompt"*).
+   * unredacted; it's their prompt"*), the buyer's carries only the redaction.
    *
    * ⚠️ The caller must have already established that the requester **is** the
    * agent's owner. The `accountId` predicate below admits the buyer too — it is
@@ -279,7 +290,6 @@ export class OrderRepository {
   ): Promise<SellerCaseFileRow | null> {
     const row = await this.caseFileQuery(orderId, accountId)
       .addSelect('v.system_prompt', 'systemPrompt')
-      .addSelect('r.steps', 'runSteps')
       .getRawOne<SellerCaseFileRow>();
 
     return row ?? null;
@@ -304,6 +314,15 @@ export class OrderRepository {
         'r.output AS "runOutput"',
         'r.error AS "runError"',
         'r.duration_ms AS "runDurationMs"',
+        // ⚠️ Shared, not a seller-only column any more. The raw jsonb — reasoning
+        // included — now enters the process on a buyer's read too, because a
+        // buyer is owed the summarised trace (`api-design.md` §1.3) and
+        // `reasoning` lives in the same column as the fields the summary is
+        // composed from, so no select list can separate them. What protects the
+        // buyer's copy is `toBuyerCaseFileSteps`, which reads four fields by
+        // name, and `CaseFileStepResponse`, which has nowhere to put a fifth.
+        // See `case-file.service.ts` `getForBuyer` for the full argument.
+        'r.steps AS "runSteps"',
       ])
       .where('o.id = :orderId', { orderId })
       .andWhere('(o.buyer_account_id = :accountId OR a.owner_account_id = :accountId)', {
@@ -540,9 +559,16 @@ export interface OrderSummaryRow {
 /**
  * The evidence, as a buyer may see it.
  *
- * ⚠️ **No `systemPrompt` member and no raw `steps`.** The type is the second
- * guarantee behind the query that produced it: even if the select list grew the
- * column back, nothing downstream would have anywhere to put it.
+ * ⚠️ **No `systemPrompt` member.** The type is the second guarantee behind the
+ * query that produced it: even if the select list grew the column back, nothing
+ * downstream would have anywhere to put it.
+ *
+ * ⚠️ **`runSteps` is `unknown[]`, not `ExecutionStep[]`, and that is the point
+ * on this side.** The jsonb is unvalidated *and* holds `reasoning`, which a
+ * buyer may not see. Typing it as the entity would put a `reasoning` property in
+ * scope for anything holding this row, one autocomplete away from a response.
+ * `toBuyerCaseFileSteps` takes `unknown` for the same reason and re-reads four
+ * fields by name.
  *
  * The `run*` columns are `null` for an order that has not run. That is content,
  * not an error — an absent output is how non-delivery is proven.
@@ -556,14 +582,16 @@ export interface CaseFileRow {
   runOutput: Record<string, unknown> | null;
   runError: string | null;
   runDurationMs: number | null;
+  runSteps: unknown[] | null;
 }
 
 /**
- * The same evidence, as its seller may see it: the prompt is theirs, and the
- * execution steps are unredacted because a reasoning turn quoting their own
- * instructions is quoting them to themselves.
+ * The same evidence, as its seller may see it: one member wider, because the
+ * prompt is theirs. The steps are the same raw jsonb both parties' queries now
+ * fetch; what makes the seller's copy unredacted is that `getForSeller` also
+ * emits `rawSteps` from it — a reasoning turn quoting their own instructions is
+ * quoting them to themselves.
  */
 export interface SellerCaseFileRow extends CaseFileRow {
   systemPrompt: string;
-  runSteps: unknown[] | null;
 }

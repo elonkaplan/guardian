@@ -34,7 +34,7 @@ changes.
 | Findings | 12 |
 | Blockers | 2 — both `fixed-frontend` |
 | Other defects fixed | 1 (R-03) |
-| `api-wrong`, escalated | 1 (R-04) |
+| `api-wrong`, escalated | 1 (R-04) — since fixed in `api/` |
 | Diverging on purpose, recorded | 5 |
 | Orphan endpoints named | 6 |
 | Latent risk recorded, not fixed | 1 (R-12) |
@@ -47,7 +47,7 @@ changes.
 | **R-01** | `POST /auth/nonce` → the signed string | Contract returns `{nonce, message}` and requires a signature over **`message`**, a multi-line string embedding the address. Frontend declared only `nonce` and signed it verbatim | Row 1, `design-stale` — api-design §3.1 was updated *because* the client signs `message` | **fixed-frontend** | The contract is correct and the frontend was wrong. Confirmed live: same key, same nonce — signing `nonce` → `401 Signature verification failed`, signing `message` → `201` with a token |
 | **R-02** | `GET /orders/{id}/verdict` error handling | Contract returns a bare `{error: CODE}` with **two different 404s**: `ORDER_NOT_FOUND` (terminal) and `VERDICT_NOT_FOUND` (audit still running, keep polling), plus `409 AUDIT_FAILED` (terminal). Frontend branched on HTTP status alone | Row 6, `intentional` — the bare code was kept deliberately *so that* a client can tell the two apart | **fixed-frontend** | Wrong in both directions at once: it stopped on the case that resolves by waiting and retried the case that never does. Confirmed live: both 404 codes reproduced |
 | **R-03** | `GET /agents?owner=me` → `listed` | `OwnedAgentResponse` requires `listed`; frontend's `OwnedAgent` declared five of six fields and discarded it | Not a row — confirmed under *What matched* | **fixed-frontend** | `active: true, listed: false` renders as a healthy agent that no buyer can see. The contract's own note says it is "worth surfacing in the UI" |
-| **R-04** | `GET /orders/{id}/case-file` → `steps`, buyer view | Contract documents a summarised trace; the API returns `steps: []` **unconditionally** for a buyer. The seller's copy of the same order carries the real trace | **Row 5, `api-wrong`, `DO NOT ADOPT`** — the only defect the report found | **escalated** | See in full below. Copy changed so an empty list stops reading as "the agent did nothing"; no data workaround |
+| **R-04** | `GET /orders/{id}/case-file` → `steps`, buyer view | Contract documented a summarised trace; the API returned `steps: []` **unconditionally** for a buyer. The seller's copy of the same order carried the real trace | **Row 5, `api-wrong`** — the only defect the report found; now `FIXED` | **escalated → fixed in `api/` 2026-08-09** | See in full below. The escalation was decided *fix it*; the frontend's interim copy has been withdrawn along with the bug |
 | R-05 | `POST /withdraw` → `WithdrawResponse` | Contract requires `[txHash, amountMinor, explorerUrl]` with `txHash` **non-nullable**. Frontend declares only `txHash: string \| null` | Not a row | **no-change** | Three separate answers — see below |
 | R-06 | `GET /me` → `accountId` | Contract sends it; frontend does not declare it | Not a row | **ignored-with-reason** | Nothing in the app renders an account id (verified: zero matches for `accountId` in `src/`). `GET /auth/session` is the documented way to learn it |
 | R-07 | `GET /orders` | Defined by the contract; **no frontend module calls it**. `MyOrdersPage` is a four-line placeholder | Not a row | **named-orphan** | Building the page is out of scope. All three demo acts run on the order detail screen. The test plan makes the placeholder an *expected* result so it is not reported as a failure |
@@ -59,12 +59,16 @@ changes.
 
 ---
 
-## R-04 in full — the one `api-wrong` row
+## R-04 in full — the one `api-wrong` row, since fixed
 
-**What the API does.** `CaseFileService.getForBuyer` returns `steps: []` unconditionally;
-`findCaseFileForBuyer` does not select the trace at all, so it never enters the process on a
-buyer's read. Verified live: a buyer's case file for an order returns an empty array while the
-seller's case file for the *same order* returns the populated trace.
+**Status: closed on 2026-08-09.** The escalation this row raised was decided *fix it*, and the
+API now sends a buyer the redacted trace. The account below is kept as written, with the
+outcome at the end.
+
+**What the API did.** `CaseFileService.getForBuyer` returned `steps: []` unconditionally;
+`findCaseFileForBuyer` did not select the trace at all, so it never entered the process on a
+buyer's read. Verified live: a buyer's case file for an order returned an empty array while the
+seller's case file for the *same order* returned the populated trace.
 
 **Why it is wrong.** `api-design.md` §1.3 and `ui-design.md` §7.1 both state that a buyer sees a
 summarised execution trace. The summarisation machinery exists precisely because a reasoning
@@ -73,25 +77,36 @@ rows were being written, so an empty trace was a true statement that nothing had
 premise expired when API-08 shipped. It is now a silent omission of evidence the design says
 the buyer is owed.
 
-**Why it was not fixed.** The divergence report declines to decide it, and says why: the fix
-deliberately weakens one of three layers protecting invariant #3 — *`system_prompt` never
+**Why this pass did not fix it.** The divergence report declined to decide it, and said why: the
+fix deliberately weakens one of three layers protecting invariant #3 — *`system_prompt` never
 reaches a buyer* — and that is a judgement about the seller-IP boundary belonging to whoever
-owns it, not to a contract-writing pass or a frontend reconciliation. **This note raises it; it
-does not decide it either.**
+owns it, not to a contract-writing pass or a frontend reconciliation. **This note raised it; it
+did not decide it either.**
 
-**Escalated to:** the `api/` component, referencing divergence row 5 and its `DO NOT ADOPT`
-marker in both the report and `openapi.yaml`. The row closes here and stays open there.
+**Escalated to:** the `api/` component, as `api/docs/ESCALATION-buyer-case-file-steps.md`,
+referencing divergence row 5.
 
-**What the frontend does meanwhile.** Copy only. `ExecutionSteps` now says, on a buyer's copy,
-that the execution trace is not included in a buyer's case file and that this is not a statement
+**What the frontend did meanwhile.** Copy only. `ExecutionSteps` said, on a buyer's copy, that
+the execution trace is not included in a buyer's case file and that this is not a statement
 about what the agent did. It previously said *"No execution steps were recorded for this order"*
 — a false claim about their order, and the worst kind, because it reads as evidence the agent
 did nothing on the screen where a buyer is deciding whether they were treated fairly.
 
-**What it does not do**, and these are the point: it does not fetch the seller's endpoint (that
-would break invariant #3 from the client side), does not synthesise steps, and does not hide the
-section as though the design never called for it. When the API starts populating a buyer's
-trace, the new branch simply stops being reached. **No workaround exists to outlive the bug.**
+**What it did not do**, and these were the point: it did not fetch the seller's endpoint (that
+would break invariant #3 from the client side), did not synthesise steps, and did not hide the
+section as though the design never called for it. **No workaround was to outlive the bug.**
+
+**How it closed.** The decision came back *fix it*: the layer given up was the buyer's select
+list, and it could not have been kept anyway — `reasoning` shares a jsonb column with the fields
+the summary is built from, so it was the whole trace or none of it. The two remaining layers are
+structural rather than attentional: `toBuyerCaseFileSteps` reads four fields by name and never
+`reasoning`, and `CaseFileStepResponse` is closed. `system_prompt` is still absent from the
+buyer's query, and is now the only column separating the two case files.
+
+The interim copy is gone, exactly as promised: `ExecutionSteps` no longer takes `perspective`,
+because an empty list now means the same thing to either reader — no run, or a run that recorded
+nothing. `manual-test-plan.md` §7.7 flipped with it, from *expect `[]`* to *expect a populated,
+redacted list*.
 
 ---
 
@@ -154,7 +169,7 @@ would delete them while everything still compiled.
 | `model` | `VerdictResponse` | Would push the verdict card toward "an AI decided this" |
 | `explorerUrl` | `WithdrawResponse` | Two sources of truth for where a hash points |
 | `amountMinor` | `WithdrawResponse` | `GET /me` is the authority on every figure on that screen |
-| `steps` (buyer) | `BuyerCaseFileResponse` | Declared, but always empty — R-04. Kept typed; the API is the defect |
+| `steps` (buyer) | `BuyerCaseFileResponse` | No longer in this table. It was declared-but-always-empty under R-04; since 2026-08-09 the API populates it and the screen renders it. Keeping it typed through the empty period is what made the fix a no-op on this side |
 
 One field travels the other way: `Verdict.unreadableCitations` exists on the frontend type and
 not on the wire. It is produced by the normaliser so that a citation this app could not parse is

@@ -202,11 +202,11 @@ function renderBody(
 
       <section className="case-file__section">
         <h3 className="case-file__heading">What the agent did</h3>
-        {/* `perspective` reaches the trace because an empty list means two
-            different things depending on who is asking: the API never sends a
-            buyer their trace, so a buyer's empty list is silence rather than
-            evidence. See the note in `ExecutionSteps`. */}
-        <ExecutionSteps steps={caseFile.steps} perspective={perspective} />
+        {/* No `perspective`. Both parties are sent the same redacted trace, so
+            an empty list means the same thing to either reader — it stopped
+            needing to know who is asking when the API started sending a buyer
+            their steps. See the note in `ExecutionSteps`. */}
+        <ExecutionSteps steps={caseFile.steps} />
       </section>
     </>
   );

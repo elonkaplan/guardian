@@ -168,12 +168,12 @@ export interface BuyerCaseFileResponse {
   output: unknown | null;
 
   /**
-   * The redacted trace. **Always `[]` until API-08 exists** — no `runs` rows
-   * are written by this feature, so every case file today reports an empty
-   * trace, which is correct rather than provisional: nothing has run.
+   * The **redacted** trace — `toBuyerCaseFileSteps` over `runs.steps`, never the
+   * raw jsonb. `reasoning` shares that column and may not cross this boundary;
+   * `CaseFileStepResponse` is closed so it has nowhere to land.
    *
-   * Empty, never absent. An order that produced no steps is a fact the screen
-   * states.
+   * Empty, never absent. `[]` means the order has no run, or a run recorded no
+   * steps — a fact the screen states, not a placeholder.
    */
   steps: CaseFileStepResponse[];
 }
